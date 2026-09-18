@@ -1,22 +1,19 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { 
-  Rocket, Star, Check, Calendar, Clock, Users, Award, 
-  GraduationCap, MapPin, Navigation, KeyRound, Eye, EyeOff, 
-  Lock, Phone, Copy, FileText, Sparkles, Upload, ShieldCheck, 
-  CheckCircle2, X, ChevronLeft, ChevronRight, ArrowRight, 
-  Loader2, HelpCircle, Heart, Menu, School, BadgePercent,
-  Receipt, MessageCircle, AlertCircle,
-  RotateCcw // <-- Tambahkan ini di sini
+  Rocket, Star, Check, Users, Award, 
+  GraduationCap, MapPin, KeyRound, Eye, EyeOff, 
+  Lock, Phone, Copy, ShieldCheck, 
+  X, ArrowRight, Loader2, RotateCcw
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import imageCompression from 'browser-image-compression';
 import { supabase } from '@/lib/supabase';
 
-// 1. Data Tutor Idola (UI, ITB, UGM)
+// 1. Data Tutor Unggulan (Hanya untuk Etalase Profil/Inspirasi Murid)
 const TUTORS = [
   {
     id: '1',
@@ -26,7 +23,6 @@ const TUTORS = [
     rating: '4.98',
     sessions: 142,
     badge: 'SUPER SABAR 💕',
-    grade: 'TK - SD Kelas 6',
     avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&auto=format&fit=crop&q=80',
     bio: 'Menjelaskan logika rumus dari akarnya lewat permainan edukatif tanpa hafalan buta, bikin matematika jadi pelajaran favorit si kecil.',
   },
@@ -38,7 +34,6 @@ const TUTORS = [
     rating: '4.95',
     sessions: 98,
     badge: 'FAVORIT SAINS 🧪',
-    grade: 'SD Kelas 3 - 6',
     avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80',
     bio: 'Membawa alat peraga dan eksperimen seru ke rumah, melatih nalar kritis dan rasa ingin tahu anak terhadap sains.',
   },
@@ -50,9 +45,8 @@ const TUTORS = [
     rating: '5.00',
     sessions: 186,
     badge: 'FUN ENGLISH 🇬🇧',
-    grade: 'TK & SD Seluruh Kelas',
     avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=400&auto=format&fit=crop&q=80',
-    bio: 'Metode pengajaran dua arah dengan flashcards dan roleplay menyenangkan, melatih keberanian anak berbicara bahasa Inggris sejak hari pertama.',
+    bio: 'Metode pengajaran interaktif dengan flashcards dan roleplay menyenangkan, melatih keberanian anak berbicara bahasa Inggris.',
   },
   {
     id: '4',
@@ -62,13 +56,12 @@ const TUTORS = [
     rating: '4.97',
     sessions: 85,
     badge: 'CREATIVE TECH 💻',
-    grade: 'SD Kelas 2 - 6',
     avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=400&auto=format&fit=crop&q=80',
     bio: 'Mengasah kreativitas anak membuat game animasi sendiri dengan Scratch, melatih computational thinking sejak usia dini.',
   },
 ];
 
-// 2. Data Paket Langganan Tatap Muka
+// 2. Data Paket Bimbingan Belajar
 const PACKAGES = [
   {
     daysPerWeek: 1,
@@ -123,42 +116,27 @@ const PACKAGES = [
   },
 ];
 
-const DAYS = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
-const FULL_DAYS_MAP: { [key: string]: string } = {
-  'Sen': 'Senin', 'Sel': 'Selasa', 'Rab': 'Rabu', 'Kam': 'Kamis',
-  'Jum': 'Jumat', 'Sab': 'Sabtu', 'Min': 'Minggu'
-};
-
-const TIMES = [
-  { id: '14:00 - 15:30', label: '14:00 - 15:30 WIB', icon: '☀️', desc: 'Sesi Siang Ceria (Pas Pulang Sekolah)' },
-  { id: '16:00 - 17:30', label: '16:00 - 17:30 WIB', icon: '🎨', desc: 'Sore Favorit Anak (Paling Populer)' },
-  { id: '18:00 - 19:30', label: '18:00 - 19:30 WIB', icon: '🌙', desc: 'Sesi Malam Tenang (Fokus Belajar)' }
-];
-
 export default function HomePage() {
   const router = useRouter();
 
-  // Role Tab Form Pendaftaran Utama: 'murid' | 'tutor'
+  // Role Tab Form Pendaftaran: 'murid' | 'tutor'
   const [roleTab, setRoleTab] = useState<'murid' | 'tutor'>('murid');
 
-  // Pilihan Pemesanan Murid
+  // Pilihan Paket Murid
   const [selectedPkg, setSelectedPkg] = useState<typeof PACKAGES[0]>(PACKAGES[1]);
-  const [selectedDays, setSelectedDays] = useState<string[]>(['Sel', 'Kam']);
-  const [selectedTime, setSelectedTime] = useState('16:00 - 17:30');
-  const [selectedTutor, setSelectedTutor] = useState<typeof TUTORS[0]>(TUTORS[0]);
 
-  // Input Form Murid
-  const [studentName, setStudentName] = useState('Raditya Pratama');
-  const [parentPhone, setParentPhone] = useState('081298453321');
-  const [studentPassword, setStudentPassword] = useState('123456');
+  // Input Form Registrasi Murid
+  const [studentName, setStudentName] = useState('');
+  const [studentGrade, setStudentGrade] = useState('Kelas 4 SD');
+  const [parentPhone, setParentPhone] = useState('');
+  const [studentPassword, setStudentPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [studentAddress, setStudentAddress] = useState('Jl. Boulevard Raya Blok A4 No. 18, Kelapa Gading, Jakarta Utara');
-  const [mapsUrl, setMapsUrl] = useState('https://maps.app.goo.gl/k3x7QZ92p');
+  const [studentAddress, setStudentAddress] = useState('');
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [loadingStudent, setLoadingStudent] = useState(false);
   const [copiedRek, setCopiedRek] = useState(false);
 
-  // Input Form Guru (Mitra Tutor)
+  // Input Form Registrasi Guru
   const [tutorName, setTutorName] = useState('');
   const [tutorPhone, setTutorPhone] = useState('');
   const [tutorPassword, setTutorPassword] = useState('');
@@ -182,21 +160,6 @@ export default function HomePage() {
   const [loginError, setLoginError] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
 
-  // Toggle Hari Belajar sesuai Kuota Paket
-  const toggleDay = (day: string) => {
-    if (selectedDays.includes(day)) {
-      if (selectedDays.length > 1) {
-        setSelectedDays(selectedDays.filter((d) => d !== day));
-      }
-    } else {
-      if (selectedDays.length < selectedPkg.daysPerWeek) {
-        setSelectedDays([...selectedDays, day]);
-      } else {
-        alert(`Paket ${selectedPkg.title} batasnya ${selectedPkg.daysPerWeek} hari per pekan.`);
-      }
-    }
-  };
-
   // Salin No Rekening BCA
   const handleCopyBCA = () => {
     navigator.clipboard.writeText('827190284410');
@@ -204,60 +167,78 @@ export default function HomePage() {
     setTimeout(() => setCopiedRek(false), 2500);
   };
 
-  // Submit Pendaftaran Murid
+  // 1. Submit Registrasi Akun Murid (Tanpa Jadwal, Belum Di-ACC)
   const handleCheckoutStudent = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (selectedDays.length !== selectedPkg.daysPerWeek) {
-      return alert(`Silakan pilih tepat ${selectedPkg.daysPerWeek} hari belajar pada jadwal.`);
+    if (loadingStudent) return;
+
+    if (!studentName.trim() || !parentPhone.trim()) {
+      return alert('Lengkapi nama siswa dan nomor WhatsApp orang tua!');
     }
     if (!studentPassword.trim() || studentPassword.length < 6) {
-      return alert('Buat kata sandi/PIN minimal 6 karakter!');
+      return alert('Buat kata sandi akun minimal 6 karakter!');
+    }
+    if (!receiptFile) {
+      return alert('Harap lampirkan foto struk/bukti transfer!');
     }
 
     setLoadingStudent(true);
     try {
-      let receiptUrl = '';
-      if (receiptFile) {
-        const options = { maxSizeMB: 0.4, maxWidthOrHeight: 1200, useWebWorker: true };
-        const compressed = await imageCompression(receiptFile, options);
-        const ext = receiptFile.name.split('.').pop();
-        const path = `receipts/${Date.now()}-${Math.random().toString(36).substring(2)}.${ext}`;
-        await supabase.storage.from('transfer-receipts').upload(path, compressed);
-        const { data } = supabase.storage.from('transfer-receipts').getPublicUrl(path);
-        receiptUrl = data.publicUrl;
-      }
+      // Kompresi dan unggah struk transfer
+      const options = { maxSizeMB: 0.4, maxWidthOrHeight: 1200, useWebWorker: true };
+      const compressed = await imageCompression(receiptFile, options);
+      const ext = receiptFile.name.split('.').pop();
+      const path = `receipts/${Date.now()}-${Math.random().toString(36).substring(2)}.${ext}`;
+      
+      const { error: uploadErr } = await supabase.storage.from('transfer-receipts').upload(path, compressed);
+      if (uploadErr) throw uploadErr;
 
-      const formattedDays = selectedDays.map(d => FULL_DAYS_MAP[d] || d).join(', ');
+      const { data: urlData } = supabase.storage.from('transfer-receipts').getPublicUrl(path);
 
+      // Simpan akun dengan status PENDING (Hari, Jam & Mentor diatur murid setelah di-ACC)
       const { error } = await supabase.from('registrations').insert([
         {
           student_name: studentName.trim(),
           phone_number: parentPhone.trim(),
           password: studentPassword.trim(),
           address: studentAddress.trim(),
-          maps_url: mapsUrl.trim() || `https://maps.google.com/?q=${encodeURIComponent(studentAddress)}`,
+          maps_url: `https://maps.google.com/?q=${encodeURIComponent(studentAddress.trim())}`,
           selected_package: selectedPkg.title,
-          selected_days: formattedDays,
-          selected_time: selectedTime,
-          transfer_receipt_url: receiptUrl || 'https://placehold.co/600x400/png?text=Menunggu+Struk+Transfer',
-          is_verified: false,
+          grade: studentGrade,
+          transfer_receipt_url: urlData.publicUrl,
+          is_approved: false,         // Kunci: Menunggu persetujuan
+          status: 'pending',           // Kunci: Status pendaftaran
+          has_scheduled: false         // Kunci: Belum mengatur jadwal
         }
       ]);
 
       if (error) throw error;
 
       confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
-      alert('Horeee! 🎉 Pendaftaran les berhasil dikirim! Tim Cerdas Junior akan menyapa Ayah/Bunda via WhatsApp untuk konfirmasi jadwal.');
+      alert(
+        'Horeee! 🎉 Pendaftaran akun berhasil dikirim!\n\n' +
+        'Kepala Sekolah akan memverifikasi pembayaran Ayah/Bunda via WhatsApp. ' +
+        'Setelah disetujui, masuk ke Portal Murid untuk menentukan jadwal les dan memilih mentor idola.'
+      );
+
+      // Reset Form
+      setStudentName('');
+      setParentPhone('');
+      setStudentPassword('');
+      setStudentAddress('');
+      setReceiptFile(null);
     } catch (err: any) {
-      alert('Gagal mengirim pemesanan: ' + err.message);
+      alert('Gagal mengirim pendaftaran: ' + err.message);
     } finally {
       setLoadingStudent(false);
     }
   };
 
-  // Submit Pendaftaran Guru
+  // 2. Submit Pendaftaran Mitra Guru
   const handleRegisterTutor = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loadingTutor) return;
+
     if (!tutorPassword.trim() || tutorPassword.length < 6) {
       return alert('Kata sandi akun guru minimal 6 karakter!');
     }
@@ -282,14 +263,15 @@ export default function HomePage() {
           major: tutorMajor.trim(),
           achievements: tutorAchievements.trim(),
           certificate_url: certUrl || null,
-          is_approved: false,
+          is_approved: false,         // Kunci: Menunggu persetujuan
+          status: 'pending'
         }
       ]);
 
       if (error) throw error;
 
       confetti({ particleCount: 120, spread: 70, origin: { y: 0.6 } });
-      alert('Lamaran Mitra Guru Terkirim! Kualifikasi Anda sedang ditinjau Kepala Sekolah Cerdas Academy.');
+      alert('Lamaran Mitra Guru Terkirim! Kualifikasi Anda sedang ditinjau Kepala Sekolah. Tunggu konfirmasi akun aktif sebelum login.');
       setTutorName('');
       setTutorPhone('');
       setTutorPassword('');
@@ -304,7 +286,7 @@ export default function HomePage() {
     }
   };
 
-  // Eksekusi Login Terpadu Multi-Role
+  // 3. Eksekusi Login Terpadu (Dengan Verifikasi Status ACC)
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginLoading(true);
@@ -322,6 +304,12 @@ export default function HomePage() {
           .single();
 
         if (error || !data) throw new Error('Akun murid tidak ditemukan!');
+
+        // Gembok verifikasi Kepala Sekolah
+        if (!data.is_approved && data.status !== 'verified') {
+          throw new Error('Akun Anda masih dalam antrean verifikasi pembayaran oleh Kepala Sekolah. Silakan tunggu konfirmasi via WhatsApp.');
+        }
+
         const validPw = data.password || '123456';
         if (loginPassword.trim() !== validPw) throw new Error('Kata sandi murid salah!');
 
@@ -338,13 +326,19 @@ export default function HomePage() {
           .single();
 
         if (error || !data) throw new Error('Akun guru tidak ditemukan!');
+
+        // Gembok verifikasi Kepala Sekolah
+        if (!data.is_approved) {
+          throw new Error('Pendaftaran akun guru Anda sedang ditinjau Kepala Sekolah. Akun belum aktif sebelum disetujui.');
+        }
+
         const validPw = data.password || '123456';
         if (loginPassword.trim() !== validPw) throw new Error('Kata sandi guru salah!');
 
         localStorage.setItem('cerdas_tutor_phone', loginPhone.trim());
         router.push('/guru');
       } else {
-        // Kepala Sekolah
+        // Kepala Sekolah (Admin)
         const { data: authSettings } = await supabase
           .from('admin_auth_settings')
           .select('*')
@@ -425,7 +419,7 @@ export default function HomePage() {
           </div>
 
           <div className="flex items-center gap-2.5">
-            {/* Tab Selector Role (Murid vs Guru) */}
+            {/* Tab Switcher Role */}
             <div className="hidden sm:flex p-1 bg-slate-100 rounded-2xl border border-slate-200 text-xs font-bold">
               <button
                 type="button"
@@ -489,7 +483,7 @@ export default function HomePage() {
             href="#workspace-pesan"
             className="px-5 py-2.5 rounded-full bg-white text-orange-600 hover:bg-amber-50 font-black text-xs shadow-md transition-transform hover:scale-105 active:scale-95 shrink-0 z-10 flex items-center gap-1.5"
           >
-            <span>Klaim Promo Sekarang</span>
+            <span>Daftar Sekarang</span>
             <ArrowRight className="w-4 h-4" />
           </a>
         </section>
@@ -515,11 +509,11 @@ export default function HomePage() {
 
               <p className="text-xs sm:text-sm text-slate-600 font-medium leading-relaxed max-w-xl">
                 {roleTab === 'murid'
-                  ? 'Kakak guru berprestasi dari UI, ITB & UGM siap datang langsung ke rumah. Belajar gak bikin stres, pemahaman konsep mendalam lewat games, nilai rapor auto melesat naik!'
-                  : 'Bergabung bersama 1.200+ mahasiswa & sarjana berprestasi PTN. Jadwal mengajar fleksibel sesuai waktu luang kuliah dengan honor pasti cair tepat waktu.'}
+                  ? 'Daftar sekarang, verifikasi pembayaran dengan Kepala Sekolah, lalu tentukan hari les dan pilih mentor idola sendiri langsung di dalam portal belajarmu!'
+                  : 'Bergabung bersama 1.200+ mahasiswa & sarjana berprestasi PTN. Ambil jadwal bimbingan belajar murid di bursa tugas dengan honor pasti cair tepat waktu.'}
               </p>
 
-              {/* 3 Metric Pills */}
+              {/* Metric Pills */}
               <div className="grid grid-cols-3 gap-3 pt-2 max-w-lg">
                 <div className="bg-white rounded-2xl p-3 border-2 border-emerald-200 text-center shadow-xs">
                   <span className="text-lg">🎈</span>
@@ -539,7 +533,6 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* Ilustrasi Card Foto Siswa */}
             <div className="lg:col-span-5 relative">
               <div className="rounded-3xl bg-white p-3 border-2 border-sky-200 shadow-xl overflow-hidden">
                 <div className="relative h-64 sm:h-72 w-full rounded-2xl overflow-hidden">
@@ -551,10 +544,10 @@ export default function HomePage() {
                   <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent" />
                   <div className="absolute bottom-3 left-3 right-3 text-white">
                     <span className="px-2 py-0.5 rounded-full bg-amber-400 text-amber-950 font-black text-[9px]">
-                      SESI AKTIF TATAP MUKA
+                      METODE CERDAS JUNIOR
                     </span>
-                    <h3 className="font-black text-sm mt-1">Matematika Pecahan Kreatif 🍕</h3>
-                    <p className="text-[11px] text-slate-200">Raditya (Kelas 4 SD) & Kak Sarah (UI)</p>
+                    <h3 className="font-black text-sm mt-1">Belajar Mandiri, Seru & Terarah 🍕</h3>
+                    <p className="text-[11px] text-slate-200">Jadwal & Guru Ditentukan Sendiri Oleh Murid</p>
                   </div>
                 </div>
               </div>
@@ -568,17 +561,17 @@ export default function HomePage() {
           /* ================= MODE MURID ================= */
           <div className="space-y-8">
             
-            {/* A. CAROUSEL KAKAK TUTOR JUARA */}
+            {/* ETALASE INSPIRASI KAKAK TUTOR */}
             <section className="space-y-3">
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-base font-black text-slate-900 flex items-center gap-1.5">
-                    <span>Kakak Tutor Juara & Bersahabat</span>
+                    <span>Inspirasi Kakak Mentor Berprestasi</span>
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 font-bold border border-rose-200">
-                      Top 5% Seleksi Ketat ⭐
+                      Top 5% Seleksi PTN ⭐
                     </span>
                   </h2>
-                  <p className="text-xs text-slate-500 font-medium">Mahasiswa berprestasi PTN terbaik yang sabar dan memahami karakter anak</p>
+                  <p className="text-xs text-slate-500 font-medium">Bisa kamu pilih langsung setelah akun pendaftaranmu aktif!</p>
                 </div>
               </div>
 
@@ -586,10 +579,7 @@ export default function HomePage() {
                 {TUTORS.map((tutor) => (
                   <div
                     key={tutor.id}
-                    onClick={() => setSelectedTutor(tutor)}
-                    className={`bg-white rounded-3xl p-4 border-2 transition-all cursor-pointer relative flex flex-col justify-between hover:-translate-y-1 shadow-sm ${
-                      selectedTutor.id === tutor.id ? 'border-sky-500 shadow-md ring-2 ring-sky-200' : 'border-slate-200'
-                    }`}
+                    className="bg-white rounded-3xl p-4 border-2 border-slate-200 relative flex flex-col justify-between shadow-sm"
                   >
                     <span className="text-[9px] font-black px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 w-max mb-2">
                       {tutor.badge}
@@ -611,10 +601,10 @@ export default function HomePage() {
                     <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
                       <div className="flex items-center gap-1 font-bold text-amber-500">
                         <span>⭐ {tutor.rating}</span>
-                        <span className="text-[10px] text-slate-400 font-normal">({tutor.sessions})</span>
+                        <span className="text-[10px] text-slate-400 font-normal">({tutor.sessions} sesi)</span>
                       </div>
                       <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">
-                        🚗 Siap Datang
+                        Standar PTN
                       </span>
                     </div>
                   </div>
@@ -622,15 +612,15 @@ export default function HomePage() {
               </div>
             </section>
 
-            {/* B. PILIH PAKET LANGGANAN TATAP MUKA */}
+            {/* PILIH PAKET BELAJAR */}
             <section className="space-y-3" id="paket-section">
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-base font-black text-slate-900 flex items-center gap-1">
-                    <span>Pilih Paket Langganan Tatap Muka</span>
+                    <span>Pilih Paket Belajar</span>
                     <span>🎁</span>
                   </h2>
-                  <p className="text-xs text-slate-500 font-medium">Bebas pilih frekuensi hari, modul & games interaktif sudah disiapkan tutor</p>
+                  <p className="text-xs text-slate-500 font-medium">Bebas pilih intensitas belajar bulanan sesuai kebutuhan anak</p>
                 </div>
                 <span className="text-[10px] bg-amber-100 text-amber-900 font-black px-2.5 py-1 rounded-full border border-amber-300">
                   🛡️ Garansi Guru Cocok
@@ -643,10 +633,7 @@ export default function HomePage() {
                   return (
                     <div
                       key={pkg.id}
-                      onClick={() => {
-                        setSelectedPkg(pkg);
-                        setSelectedDays(DAYS.slice(0, pkg.daysPerWeek));
-                      }}
+                      onClick={() => setSelectedPkg(pkg)}
                       className={`bg-white rounded-3xl p-5 border-2 transition-all cursor-pointer relative flex flex-col justify-between ${
                         isSelected ? 'border-sky-500 shadow-xl ring-2 ring-sky-200' : 'border-slate-200 hover:border-slate-300'
                       }`}
@@ -698,131 +685,70 @@ export default function HomePage() {
               </div>
             </section>
 
-            {/* C. WORKSPACE JADWAL & FORM PEMESANAN */}
-            <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start" id="workspace-pesan">
-              
-              {/* Kolom Kiri: Pemilih Hari & Waktu */}
-              <div className="lg:col-span-5 bg-white p-6 rounded-3xl border-2 border-sky-100 shadow-sm space-y-5">
-                <div>
-                  <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-sky-600" />
-                    Pilih Jadwal Belajar Tatap Muka
-                  </h3>
-                  <p className="text-xs text-slate-400 mt-0.5">Durasi 90 menit setiap pertemuan di rumah</p>
-                </div>
-
-                {/* Day Chips */}
-                <div>
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-xs font-bold text-slate-700">1. Tentukan {selectedPkg.daysPerWeek} Hari Les Rutin:</span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
-                      {selectedDays.length} / {selectedPkg.daysPerWeek} Hari
-                    </span>
+            {/* FORM PENDAFTARAN BERSIH (TANPA HARI/JAM/MENTOR) */}
+            <section className="bg-white p-6 sm:p-8 rounded-3xl border-2 border-sky-100 shadow-sm space-y-4 max-w-3xl mx-auto" id="workspace-pesan">
+              <div className="border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl">📝</span>
+                  <div>
+                    <h3 className="font-black text-base text-slate-900">Formulir Pendaftaran Siswa Baru</h3>
+                    <p className="text-xs text-slate-500 mt-0.5">Setelah diverifikasi, Anda bebas menentukan hari dan memilih mentor di dalam akun.</p>
                   </div>
-                  <div className="grid grid-cols-7 gap-1.5">
-                    {DAYS.map((day) => {
-                      const active = selectedDays.includes(day);
-                      return (
-                        <button
-                          key={day}
-                          type="button"
-                          onClick={() => toggleDay(day)}
-                          className={`py-2.5 rounded-2xl text-xs font-bold border-2 transition-all cursor-pointer ${
-                            active
-                              ? 'bg-sky-500 text-white border-sky-500 shadow-[0_4px_0_#0284C7]'
-                              : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-sky-300'
-                          }`}
-                        >
-                          {day}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Jam Sesi */}
-                <div>
-                  <span className="text-xs font-bold text-slate-700 block mb-2">2. Pilihan Jam Sesi (90 Menit Seru):</span>
-                  <div className="space-y-2">
-                    {TIMES.map((time) => {
-                      const active = selectedTime === time.id;
-                      return (
-                        <div
-                          key={time.id}
-                          onClick={() => setSelectedTime(time.id)}
-                          className={`p-3 rounded-2xl border-2 flex items-center justify-between cursor-pointer transition-all ${
-                            active
-                              ? 'bg-[#ffddb8] border-orange-400 text-amber-950 shadow-xs'
-                              : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-700'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2.5">
-                            <span className="text-lg">{time.icon}</span>
-                            <div>
-                              <p className="font-bold text-xs">{time.label}</p>
-                              <p className="text-[10px] text-slate-500">{time.desc}</p>
-                            </div>
-                          </div>
-                          <input type="radio" checked={active} readOnly className="accent-orange-500" />
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Tutor Card Info */}
-                <div className="p-3.5 bg-sky-50 rounded-2xl border border-sky-200 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <img src={selectedTutor.avatar} alt={selectedTutor.name} className="w-10 h-10 rounded-xl object-cover" />
-                    <div>
-                      <p className="text-[10px] font-bold text-sky-700 uppercase tracking-wider">Tutor Idola Terpilih:</p>
-                      <p className="font-black text-xs text-slate-900">{selectedTutor.name}</p>
-                    </div>
-                  </div>
-                  <span className="text-[10px] font-bold text-emerald-700 bg-white px-2 py-0.5 rounded-md border border-emerald-200">
-                    {selectedTutor.campus}
-                  </span>
                 </div>
               </div>
 
-              {/* Kolom Kanan: Form Data Murid & Checkout BCA */}
-              <div className="lg:col-span-7 bg-white p-6 sm:p-7 rounded-3xl border-2 border-sky-100 shadow-sm space-y-4">
-                <div className="border-b border-slate-100 pb-3">
-                  <h3 className="font-black text-sm text-slate-900">Formulir Pemesanan & Data Siswa</h3>
-                  <p className="text-xs text-slate-400 mt-0.5">Mohon diisi lengkap untuk surat tugas pengajar ke rumah</p>
-                </div>
-
-                <form onSubmit={handleCheckoutStudent} className="space-y-3.5 text-xs">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                    <div>
-                      <label className="font-bold text-slate-700 block mb-1">👦 Nama Lengkap Murid (Adik/Juara)</label>
-                      <input
-                        type="text"
-                        required
-                        value={studentName}
-                        onChange={(e) => setStudentName(e.target.value)}
-                        placeholder="Contoh: Raditya Pratama"
-                        className="w-full p-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-none focus:border-sky-500"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="font-bold text-slate-700 block mb-1">📱 Nomor WhatsApp Ayah / Bunda</label>
-                      <input
-                        type="tel"
-                        required
-                        value={parentPhone}
-                        onChange={(e) => setParentPhone(e.target.value)}
-                        placeholder="Contoh: 0812xxxxxxxx"
-                        className="w-full p-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-none focus:border-sky-500"
-                      />
-                    </div>
+              <form onSubmit={handleCheckoutStudent} className="space-y-4 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">👦 Nama Lengkap Murid</label>
+                    <input
+                      type="text"
+                      required
+                      value={studentName}
+                      onChange={(e) => setStudentName(e.target.value)}
+                      placeholder="Contoh: Raditya Pratama"
+                      className="w-full p-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-none focus:border-sky-500"
+                    />
                   </div>
 
-                  {/* Password / PIN Murid */}
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">🏫 Jenjang / Kelas Sekolah</label>
+                    <select
+                      value={studentGrade}
+                      onChange={(e) => setStudentGrade(e.target.value)}
+                      className="w-full p-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-none focus:border-sky-500"
+                    >
+                      <option value="TK / PAUD">TK / PAUD</option>
+                      <option value="Kelas 1 SD">Kelas 1 SD</option>
+                      <option value="Kelas 2 SD">Kelas 2 SD</option>
+                      <option value="Kelas 3 SD">Kelas 3 SD</option>
+                      <option value="Kelas 4 SD">Kelas 4 SD</option>
+                      <option value="Kelas 5 SD">Kelas 5 SD</option>
+                      <option value="Kelas 6 SD">Kelas 6 SD</option>
+                      <option value="Kelas 7 SMP">Kelas 7 SMP</option>
+                      <option value="Kelas 8 SMP">Kelas 8 SMP</option>
+                      <option value="Kelas 9 SMP">Kelas 9 SMP</option>
+                      <option value="Kelas 10-12 SMA">Kelas 10 - 12 SMA</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">📱 Nomor WhatsApp Aktif (Untuk Login)</label>
+                    <input
+                      type="tel"
+                      required
+                      value={parentPhone}
+                      onChange={(e) => setParentPhone(e.target.value)}
+                      placeholder="Contoh: 0812xxxxxxxx"
+                      className="w-full p-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-none focus:border-sky-500"
+                    />
+                  </div>
+
                   <div>
                     <label className="font-bold text-slate-700 block mb-1">
-                      🔒 Buat Kata Sandi / PIN Portal Pantau Siswa (Min. 6 Karakter)
+                      🔒 Buat Kata Sandi Akun Murid (Min. 6 Karakter)
                     </label>
                     <div className="relative">
                       <input
@@ -830,7 +756,7 @@ export default function HomePage() {
                         required
                         value={studentPassword}
                         onChange={(e) => setStudentPassword(e.target.value)}
-                        placeholder="Masukkan 6 karakter kata sandi..."
+                        placeholder="Minimal 6 karakter..."
                         className="w-full p-2.5 pr-10 bg-slate-50 border-2 border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-none focus:border-sky-500"
                       />
                       <button
@@ -842,99 +768,89 @@ export default function HomePage() {
                       </button>
                     </div>
                   </div>
+                </div>
 
-                  {/* Alamat & Titik Maps */}
-                  <div>
-                    <label className="font-bold text-slate-700 block mb-1">🏠 Alamat Lengkap Rumah (Tujuan Guru Datang)</label>
-                    <textarea
-                      required
-                      rows={2}
-                      value={studentAddress}
-                      onChange={(e) => setStudentAddress(e.target.value)}
-                      placeholder="Nama Jalan, Nomor Rumah, RT/RW, Patokan..."
-                      className="w-full p-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-medium focus:outline-none focus:border-sky-500"
-                    />
-                  </div>
+                {/* Alamat Lengkap */}
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">🏠 Alamat Lengkap Rumah (Tujuan Guru Datang)</label>
+                  <textarea
+                    required
+                    rows={2}
+                    value={studentAddress}
+                    onChange={(e) => setStudentAddress(e.target.value)}
+                    placeholder="Nama Jalan, Nomor Rumah, RT/RW, Kelurahan, Patokan Rumah..."
+                    className="w-full p-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-medium focus:outline-none focus:border-sky-500"
+                  />
+                </div>
 
-                  <div>
-                    <label className="font-bold text-slate-700 block mb-1">📍 Titik Presisi Google Maps (Agar Tidak Tersesat)</label>
-                    <input
-                      type="url"
-                      value={mapsUrl}
-                      onChange={(e) => setMapsUrl(e.target.value)}
-                      placeholder="https://maps.app.goo.gl/..."
-                      className="w-full p-2.5 bg-slate-50 border-2 border-slate-200 rounded-xl font-medium text-sky-600 focus:outline-none focus:border-sky-500"
-                    />
-                  </div>
-
-                  {/* Box Rekening BCA */}
-                  <div className="p-4 bg-gradient-to-br from-blue-50 to-sky-50 rounded-2xl border-2 border-blue-200 space-y-2">
-                    <div className="flex justify-between items-center">
-                      <div className="flex items-center gap-1.5">
-                        <span className="px-2 py-0.5 rounded bg-blue-600 text-white font-black text-[10px]">BCA</span>
-                        <span className="font-bold text-blue-900 text-xs">Rekening Resmi Bimbel Cerdas</span>
-                      </div>
-                      <span className="text-[10px] text-emerald-700 font-bold bg-emerald-100 px-2 py-0.5 rounded-full">
-                        Otomatis Dicek ⚡
-                      </span>
+                {/* Informasi Pembayaran BCA */}
+                <div className="p-4 bg-gradient-to-br from-blue-50 to-sky-50 rounded-2xl border-2 border-blue-200 space-y-2">
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-1.5">
+                      <span className="px-2 py-0.5 rounded bg-blue-600 text-white font-black text-[10px]">BCA</span>
+                      <span className="font-bold text-blue-900 text-xs">Rekening Resmi Bimbel Cerdas</span>
                     </div>
-
-                    <div className="bg-white p-3 rounded-xl border border-blue-100 flex justify-between items-center shadow-xs">
-                      <div>
-                        <p className="text-[10px] text-slate-400">Nomor Rekening BCA Resmi:</p>
-                        <p className="font-black text-sm text-blue-900 tracking-wider">8271 9028 4410</p>
-                        <p className="text-[9px] text-slate-500">a.n. PT CERDAS AKADEMI NUSANTARA</p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={handleCopyBCA}
-                        className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1 cursor-pointer transition-all active:scale-95"
-                      >
-                        <Copy className="w-3.5 h-3.5" />
-                        <span>{copiedRek ? 'Tersalin!' : 'Salin'}</span>
-                      </button>
-                    </div>
-
-                    <div className="flex justify-between items-center pt-1 text-xs">
-                      <span className="text-slate-600 font-medium">Total Investasi ({selectedPkg.title}):</span>
-                      <span className="text-base font-black text-orange-600">
-                        Rp {selectedPkg.price.toLocaleString('id-ID')}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Upload Struk Transfer */}
-                  <div>
-                    <label className="font-bold text-slate-700 block mb-1">🧾 Unggah Foto Struk Transfer (Bisa Sekarang / Nanti):</label>
-                    <input
-                      type="file"
-                      accept="image/*,.pdf"
-                      onChange={(e) => setReceiptFile(e.target.files ? e.target.files[0] : null)}
-                      className="w-full text-[11px] text-slate-500 file:mr-2 file:py-2 file:px-3 file:rounded-xl file:border-0 file:bg-sky-100 file:text-sky-800 file:font-bold hover:file:bg-sky-200"
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={loadingStudent}
-                    className="w-full py-4 rounded-2xl bg-gradient-to-r from-orange-500 to-rose-500 hover:from-orange-600 hover:to-rose-600 text-white font-black text-sm shadow-[0_5px_0_#c2410c] active:translate-y-1 active:shadow-none transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                  >
-                    {loadingStudent ? <Loader2 className="w-4 h-4 animate-spin" /> : <Rocket className="w-4 h-4" />}
-                    <span>PANGGIL KAKAK TUTOR SEKARANG! 🚀</span>
-                  </button>
-
-                  <div className="flex items-center justify-center gap-4 text-[10px] font-bold text-slate-500 pt-1">
-                    <span className="flex items-center gap-1 text-emerald-600">
-                      <ShieldCheck className="w-3.5 h-3.5" /> 100% Pembayaran Aman
-                    </span>
-                    <span>•</span>
-                    <span className="flex items-center gap-1 text-amber-600">
-                      <RotateCcw className="w-3.5 h-3.5" /> Garansi Ganti Guru
+                    <span className="text-[10px] text-emerald-700 font-bold bg-emerald-100 px-2 py-0.5 rounded-full">
+                      Verifikasi Kepala Sekolah ⚡
                     </span>
                   </div>
-                </form>
-              </div>
 
+                  <div className="bg-white p-3 rounded-xl border border-blue-100 flex justify-between items-center shadow-xs">
+                    <div>
+                      <p className="text-[10px] text-slate-400">Nomor Rekening BCA Resmi:</p>
+                      <p className="font-black text-sm text-blue-900 tracking-wider">8271 9028 4410</p>
+                      <p className="text-[9px] text-slate-500">a.n. PT CERDAS AKADEMI NUSANTARA</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleCopyBCA}
+                      className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1 cursor-pointer transition-all active:scale-95"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>{copiedRek ? 'Tersalin!' : 'Salin'}</span>
+                    </button>
+                  </div>
+
+                  <div className="flex justify-between items-center pt-1 text-xs">
+                    <span className="text-slate-600 font-medium">Paket Terpilih ({selectedPkg.title}):</span>
+                    <span className="text-base font-black text-orange-600">
+                      Rp {selectedPkg.price.toLocaleString('id-ID')}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Upload Bukti Pembayaran */}
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">🧾 Unggah Foto Struk Transfer Pembayaran</label>
+                  <input
+                    type="file"
+                    accept="image/*,.pdf"
+                    required
+                    onChange={(e) => setReceiptFile(e.target.files ? e.target.files[0] : null)}
+                    className="w-full text-[11px] text-slate-500 file:mr-2 file:py-2 file:px-3 file:rounded-xl file:border-0 file:bg-sky-100 file:text-sky-800 file:font-bold hover:file:bg-sky-200"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">*Bukti transfer akan diverifikasi oleh Kepala Sekolah sebelum akun diaktifkan.</p>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loadingStudent}
+                  className="w-full py-4 rounded-2xl bg-gradient-to-r from-orange-500 to-rose-500 hover:from-orange-600 hover:to-rose-600 text-white font-black text-sm shadow-[0_5px_0_#c2410c] active:translate-y-1 active:shadow-none transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  {loadingStudent ? <Loader2 className="w-4 h-4 animate-spin" /> : <Rocket className="w-4 h-4" />}
+                  <span>KIRIM PENDAFTARAN & TUNGGU ACC 🚀</span>
+                </button>
+
+                <div className="flex items-center justify-center gap-4 text-[10px] font-bold text-slate-500 pt-1">
+                  <span className="flex items-center gap-1 text-emerald-600">
+                    <ShieldCheck className="w-3.5 h-3.5" /> 100% Pembayaran Aman
+                  </span>
+                  <span>•</span>
+                  <span className="flex items-center gap-1 text-amber-600">
+                    <RotateCcw className="w-3.5 h-3.5" /> Garansi Guru Cocok
+                  </span>
+                </div>
+              </form>
             </section>
 
           </div>
@@ -1063,7 +979,7 @@ export default function HomePage() {
       <aside className="fixed bottom-0 left-0 right-0 z-30 p-3 bg-white/95 backdrop-blur-md border-t-2 border-sky-100 shadow-2xl">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
           <div>
-            <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Investasi Les ({selectedPkg.title}):</span>
+            <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Paket Terpilih ({selectedPkg.title}):</span>
             <div className="flex items-baseline gap-1">
               <span className="text-lg font-black text-orange-600">
                 Rp {selectedPkg.price.toLocaleString('id-ID')}
@@ -1075,7 +991,7 @@ export default function HomePage() {
             href="#workspace-pesan"
             className="px-5 py-3 rounded-2xl bg-gradient-to-r from-orange-500 to-rose-500 hover:from-orange-600 hover:to-rose-600 text-white font-black text-xs shadow-[0_4px_0_#c2410c] active:translate-y-1 active:shadow-none transition-all flex items-center justify-center gap-1.5"
           >
-            <span>Panggil Kakak Tutor! 🚀</span>
+            <span>Daftar Sekarang! 🚀</span>
           </a>
         </div>
       </aside>

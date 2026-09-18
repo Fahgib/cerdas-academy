@@ -144,7 +144,7 @@ export default function GuruDashboard() {
         .limit(1)
         .single();
 
-      if (!error && data) {
+      if (!error && data && data.is_approved) {
         setTutorProfile(data);
         setIsLoggedIn(true);
         fetchTutorData(data.full_name);
@@ -167,6 +167,7 @@ export default function GuruDashboard() {
     return () => clearInterval(interval);
   }, []);
 
+  // 1. Logika Login dengan Kunci Verifikasi Kepala Sekolah
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!tutorPhone.trim() || !tutorPassword.trim()) {
@@ -187,6 +188,13 @@ export default function GuruDashboard() {
 
       if (tutorErr || !tutorData) {
         setAuthError('Nomor WhatsApp belum terdaftar sebagai guru.');
+        setLoading(false);
+        return;
+      }
+
+      // KUNCI VERIFIKASI ACC DARI KEPALA SEKOLAH
+      if (!tutorData.is_approved) {
+        setAuthError('Pendaftaran akun guru Anda masih dalam peninjauan oleh Kepala Sekolah. Silakan tunggu konfirmasi aktivasi via WhatsApp.');
         setLoading(false);
         return;
       }
@@ -367,6 +375,7 @@ export default function GuruDashboard() {
     }
   };
 
+  // 2. Mengambil Jadwal Mandiri yang Dibuat Murid dari Bursa
   const handleClaimSchedule = async (sch: any) => {
     if (!tutorProfile?.is_approved) {
       return alert('Akun Anda belum di-ACC oleh Kepala Sekolah.');
@@ -736,6 +745,7 @@ export default function GuruDashboard() {
     (s) => s.is_substitute_needed && s.claimed_by_tutor_name !== tutorProfile?.full_name
   );
 
+  // Bursa jadwal baru yang dibuat oleh murid
   const openVacancies = schedules.filter((s) => s.status === 'open' || !s.claimed_by_tutor_name);
   const totalCompletedSessions = myAssignedSchedules.reduce((sum, sch) => sum + (sch.completed_sessions || 0), 0);
   const totalEarnedHonor = totalCompletedSessions * 30000;
@@ -1064,12 +1074,12 @@ export default function GuruDashboard() {
 
                       <div className="p-5 rounded-2xl bg-white dark:bg-[#181b25] border border-slate-200 dark:border-[#31353f] shadow-xs flex flex-col justify-between">
                         <div className="flex justify-between items-center text-slate-400">
-                          <span className="text-[11px] font-bold uppercase tracking-wider">Lowongan Murid Baru</span>
+                          <span className="text-[11px] font-bold uppercase tracking-wider">Bursa Jadwal Baru Murid</span>
                           <Icon name="add_location_alt" className="text-emerald-600 text-[20px]" />
                         </div>
                         <div className="mt-2">
                           <div className="text-2xl font-black text-slate-900 dark:text-white">{openVacancies.length} Slot</div>
-                          <p className="text-xs text-slate-400 mt-0.5">Tersedia di bursa</p>
+                          <p className="text-xs text-slate-400 mt-0.5">Dibuat langsung oleh murid</p>
                         </div>
                       </div>
 
@@ -1087,12 +1097,14 @@ export default function GuruDashboard() {
                       </div>
                     </div>
 
-                    {/* Sesi KBM Aktif, Kelas Online & Stopwatch */}
+                    {/* Sesi KBM Aktif & Bursa Lowongan */}
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
                       <div className="lg:col-span-5 space-y-6">
                         {myAssignedSchedules.length === 0 ? (
-                          <div className="p-6 bg-white dark:bg-[#181b25] rounded-2xl border border-slate-200 dark:border-[#31353f] text-center text-xs text-slate-400">
-                            Anda belum mengambil jadwal mengajar aktif.
+                          <div className="p-6 bg-white dark:bg-[#181b25] rounded-2xl border border-slate-200 dark:border-[#31353f] text-center text-xs text-slate-400 space-y-2">
+                            <Icon name="event_busy" className="text-[32px] text-slate-300 mx-auto" />
+                            <p>Anda belum memiliki jadwal murid aktif.</p>
+                            <p className="text-emerald-600 font-bold">Silakan ambil jadwal baru di kolom Bursa Lowongan Murid di sebelah kanan!</p>
                           </div>
                         ) : (
                           myAssignedSchedules.slice(0, 1).map((sch) => {
@@ -1113,10 +1125,11 @@ export default function GuruDashboard() {
 
                                 <div>
                                   <h3 className="font-bold text-base">{sch.student_name}</h3>
-                                  <p className="text-xs text-slate-500">{sch.student_address}</p>
+                                  <p className="text-xs text-emerald-600 font-semibold">{sch.today_topic || 'Bimbingan Belajar'}</p>
+                                  <p className="text-xs text-slate-500 mt-0.5">{sch.student_address}</p>
                                 </div>
 
-                                {/* TOMBOL MASUK KELAS ONLINE (JITSI MEET) */}
+                                {/* TOMBOL MASUK KELAS ONLINE JITSI MEET */}
                                 <button
                                   onClick={() => setOnlineClassSchedule(sch)}
                                   className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-sm flex items-center justify-center gap-2 transition-all cursor-pointer"
@@ -1252,33 +1265,35 @@ export default function GuruDashboard() {
                         </div>
                       </div>
 
-                      {/* Bursa Lowongan Murid Cepat */}
+                      {/* BURSA JADWAL MURID BARU (SINKRONISASI DARI PEMBUATAN JADWAL MURID) */}
                       <div className="lg:col-span-3 space-y-6">
                         <div className="p-6 rounded-2xl bg-white dark:bg-[#181b25] border border-slate-200 dark:border-[#31353f] shadow-xs space-y-4">
                           <div className="flex justify-between items-center text-xs">
-                            <h3 className="font-bold text-sm">Lowongan Les Baru</h3>
-                            <span className="text-emerald-600 font-bold">Area Terdekat</span>
+                            <h3 className="font-bold text-sm">Bursa Jadwal Murid</h3>
+                            <span className="text-emerald-600 font-bold">{openVacancies.length} Tersedia</span>
                           </div>
 
                           <div className="space-y-3 text-xs">
                             {openVacancies.length === 0 ? (
                               <div className="p-4 rounded-xl bg-slate-50 dark:bg-[#1c1f29] text-center text-slate-400">
-                                Semua slot bimbingan telah terisi.
+                                Belum ada slot jadwal murid yang terbuka.
                               </div>
                             ) : (
-                              openVacancies.slice(0, 2).map((v) => (
+                              openVacancies.map((v) => (
                                 <div key={v.id} className="p-4 rounded-xl bg-slate-50 dark:bg-[#1c1f29] space-y-2 border border-slate-100 dark:border-transparent">
                                   <div className="flex justify-between items-start font-bold">
-                                    <span>{v.student_name}</span>
-                                    <span className="text-emerald-600">Rp 30k/sesi</span>
+                                    <span className="text-slate-900 dark:text-white">{v.student_name}</span>
+                                    <span className="text-emerald-600 font-extrabold">Rp 30k/sesi</span>
                                   </div>
+                                  <p className="text-slate-600 dark:text-slate-300 font-semibold">{v.today_topic || 'Bimbingan Belajar'}</p>
                                   <p className="text-slate-400">{v.day_of_week} • {v.session_time?.substring(0, 5)} WIB</p>
+                                  <p className="text-[11px] text-slate-400 truncate">{v.student_address}</p>
                                   <button
                                     onClick={() => handleClaimSchedule(v)}
                                     disabled={claimLoading === v.id || !tutorProfile?.is_approved}
-                                    className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow-xs cursor-pointer disabled:opacity-50"
+                                    className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow-xs cursor-pointer disabled:opacity-50 transition-all"
                                   >
-                                    {claimLoading === v.id ? 'Memproses...' : 'Ambil Jadwal'}
+                                    {claimLoading === v.id ? 'Memproses...' : 'Ambil Jadwal Mengajar Ini'}
                                   </button>
                                 </div>
                               ))
@@ -1328,7 +1343,7 @@ export default function GuruDashboard() {
                               </span>
                             </div>
                             <h4 className="text-base font-bold mt-1">{sch.student_name}</h4>
-                            <p className="text-xs text-slate-500">{sch.student_address}</p>
+                            <p className="text-xs text-slate-500">{sch.today_topic || 'Bimbingan Belajar'} • {sch.student_address}</p>
                           </div>
 
                           <div className="flex gap-2 flex-wrap">

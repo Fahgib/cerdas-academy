@@ -53,10 +53,19 @@ export default function MuridDashboard() {
   const [selectedQuizOption, setSelectedQuizOption] = useState<string>('B');
   const [selectedSubject, setSelectedSubject] = useState('Matematika');
 
+  // State Pengaturan Jadwal Baru oleh Siswa
+  const [showCreateScheduleModal, setShowCreateScheduleModal] = useState(false);
+  const [newScheduleDay, setNewScheduleDay] = useState('Sen');
+  const [newScheduleTime, setNewScheduleTime] = useState('16:00');
+  const [newScheduleTopic, setNewScheduleTopic] = useState('Matematika & Logika');
+  const [selectedTutorChoice, setSelectedTutorChoice] = useState('');
+  const [availableTutors, setAvailableTutors] = useState<any[]>([]);
+  const [savingNewSchedule, setSavingNewSchedule] = useState(false);
+
   // Ruang Kelas Online Jitsi Meet
   const [onlineClassSchedule, setOnlineClassSchedule] = useState<any | null>(null);
 
-  // Modal State
+  // Modal State Lainnya
   const [showProfilePasswordModal, setShowProfilePasswordModal] = useState(false);
   const [newPasswordInput, setNewPasswordInput] = useState('');
   const [savingPassword, setSavingPassword] = useState(false);
@@ -129,7 +138,7 @@ export default function MuridDashboard() {
         .limit(1)
         .single();
 
-      if (!error && data) {
+      if (!error && data && (data.is_approved || data.is_verified)) {
         setStudentProfile(data);
         setIsLoggedIn(true);
         fetchDashboardData(phone.trim(), data.student_name);
@@ -139,6 +148,7 @@ export default function MuridDashboard() {
     }
   };
 
+  // 1. Validasi Login dengan Gembok Persetujuan Kepala Sekolah
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!studentPhone.trim() || !studentPassword.trim()) {
@@ -159,6 +169,13 @@ export default function MuridDashboard() {
 
       if (error || !data) {
         setAuthError('Nomor WhatsApp murid tidak ditemukan!');
+        setLoadingAuth(false);
+        return;
+      }
+
+      // KUNCI VERIFIKASI KEPALA SEKOLAH
+      if (!data.is_approved && !data.is_verified) {
+        setAuthError('Akun Anda masih dalam antrean verifikasi pembayaran oleh Kepala Sekolah. Silakan tunggu konfirmasi via WhatsApp.');
         setLoadingAuth(false);
         return;
       }
@@ -248,6 +265,62 @@ export default function MuridDashboard() {
       .eq('student_name', name)
       .order('created_at', { ascending: false });
     if (helpData) setHomeworkHelpList(helpData);
+  };
+
+  // Mengambil daftar tutor yang sudah resmi di-ACC Kepala Sekolah
+  const fetchTutorsForSelection = async () => {
+    const { data } = await supabase
+      .from('tutor_applications')
+      .select('*')
+      .eq('is_approved', true);
+    if (data) setAvailableTutors(data);
+  };
+
+  // 2. Pembuatan Jadwal Baru Mandiri oleh Siswa
+  const handleSaveNewSchedule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!studentProfile) return;
+
+    setSavingNewSchedule(true);
+    try {
+      const tutorAssigned = selectedTutorChoice || null;
+      const scheduleStatus = tutorAssigned ? 'claimed' : 'open';
+
+      const { error: schErr } = await supabase
+        .from('schedules')
+        .insert([
+          {
+            student_name: studentProfile.student_name,
+            student_phone: studentProfile.phone_number,
+            student_address: studentProfile.address || 'Alamat Siswa',
+            student_grade: studentProfile.grade || 'SMP',
+            day_of_week: newScheduleDay,
+            session_time: `${newScheduleTime}:00`,
+            today_topic: newScheduleTopic,
+            target_sessions: 8,
+            completed_sessions: 0,
+            status: scheduleStatus,               // 'open' masuk ke bursa guru, 'claimed' jika langsung pilih guru
+            claimed_by_tutor_name: tutorAssigned, // Nama guru pilihan siswa
+            is_substitute_needed: false
+          }
+        ]);
+
+      if (schErr) throw schErr;
+
+      await supabase
+        .from('registrations')
+        .update({ has_scheduled: true })
+        .eq('id', studentProfile.id);
+
+      confetti({ particleCount: 90, spread: 70 });
+      alert('Horeee! 🎉 Jadwal belajar Anda berhasil dibuat dan tersinkronisasi ke sistem Guru & Kepala Sekolah!');
+      setShowCreateScheduleModal(false);
+      fetchDashboardData(studentProfile.phone_number, studentProfile.student_name);
+    } catch (err: any) {
+      alert('Gagal membuat jadwal: ' + err.message);
+    } finally {
+      setSavingNewSchedule(false);
+    }
   };
 
   const handleLogout = () => {
@@ -601,7 +674,7 @@ export default function MuridDashboard() {
 
             <div className="hidden xl:flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-[#4edea3] text-xs font-semibold">
               <span className="w-2 h-2 rounded-full bg-emerald-600 dark:bg-[#4edea3] animate-pulse"></span>
-              <span>Sesi KBM Terjadwal: {todaySchedule ? `${todaySchedule.day_of_week} • ${todaySchedule.session_time?.substring(0, 5)} WIB` : '16:00 WIB'}</span>
+              <span>Sesi KBM Terjadwal: {todaySchedule ? `${todaySchedule.day_of_week} • ${todaySchedule.session_time?.substring(0, 5)} WIB` : 'Belum Ada Jadwal'}</span>
             </div>
           </div>
 
@@ -623,7 +696,7 @@ export default function MuridDashboard() {
             <div className="flex items-center gap-2 pl-2">
               <div className="flex flex-col text-right hidden lg:flex">
                 <span className="text-xs font-bold leading-tight">{studentProfile?.student_name || 'Murid Cerdas'}</span>
-                <span className="text-[10px] text-slate-400">Kelas 8 SMP • Level {currentLevel}</span>
+                <span className="text-[10px] text-slate-400">{studentProfile?.grade || 'Siswa'} • Level {currentLevel}</span>
               </div>
               <div
                 onClick={() => setActiveTab('profil')}
@@ -715,8 +788,7 @@ export default function MuridDashboard() {
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 dark:bg-[#4edea3] animate-ping"></span>
                           Portal Terverifikasi
                         </span>
-                        <span>• SMPN 115 Jakarta</span>
-                        <span>• ID: CRD-88219</span>
+                        <span>• {studentProfile?.address || 'Jakarta'}</span>
                       </div>
                       <span className="font-medium text-emerald-700 dark:text-[#4edea3]">Semester Genap • TA Berjalan</span>
                     </div>
@@ -724,10 +796,10 @@ export default function MuridDashboard() {
                     <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
                       <div className="max-w-2xl">
                         <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-                          Selamat Datang Kembali, {studentProfile?.student_name || 'Murid Cerdas'} 👋
+                          Selamat Datang, {studentProfile?.student_name || 'Murid Cerdas'} 👋
                         </h1>
                         <p className="text-xs sm:text-sm text-slate-600 dark:text-[#bbcabf] mt-1 leading-relaxed">
-                          Semua progres belajarmu tersinkronisasi. Evaluasi KBM pekan ini berpredikat <span className="text-[#006948] dark:text-[#4edea3] font-bold">Sangat Memuaskan (A+)</span>.
+                          Akun belajar Anda aktif. Tentukan hari dan pilih mentor idola untuk memulai KBM privat ke rumah.
                         </p>
                       </div>
 
@@ -821,111 +893,136 @@ export default function MuridDashboard() {
                       {/* KOLOM UTAMA (65% / 8 COLS) */}
                       <div className="lg:col-span-8 space-y-6">
                         
-                        {/* 1. KARTU SESI & STATUS MENTOR DINAMIS */}
-                        <div className="bg-white dark:bg-[#181b25] border border-slate-200 dark:border-[#31353f] rounded-2xl p-6 shadow-xs space-y-4">
-                          <div className="flex items-center justify-between">
-                            <span className="inline-flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-emerald-700 dark:text-[#4edea3]">
-                              <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 animate-ping"></span>
-                              Sesi Hari Ini
-                            </span>
-                            <span className="px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-[#4edea3] text-xs font-bold">
-                              {todaySchedule?.session_time ? `${todaySchedule.session_time.substring(0, 5)} WIB` : '16:00 - 17:30 WIB'}
-                            </span>
-                          </div>
-
-                          <div>
-                            <h3 className="font-bold text-lg">{todaySchedule?.today_topic || 'Matematika: Aljabar Lanjutan & Pemfaktoran'}</h3>
-                            <p className="text-xs text-slate-500 mt-1">
-                              Fokus: Persamaan Kuadrat, Faktorisasi Bentuk Aljabar, dan Pemecahan Soal Cerita Terapan.
-                            </p>
-                          </div>
-
-                          {/* SINKRONISASI MENTOR: TERIKAT ATAU SEDANG DIALOKASIKAN */}
-                          {todaySchedule?.claimed_by_tutor_name && !todaySchedule?.is_substitute_needed ? (
-                            <div className="p-4 bg-slate-50 dark:bg-[#1c1f29] rounded-xl flex items-center justify-between border border-slate-200/60 dark:border-transparent">
-                              <div className="flex items-center gap-3.5">
-                                <div className="w-12 h-12 rounded-xl bg-emerald-600 dark:bg-[#4edea3] text-white dark:text-[#003824] flex items-center justify-center font-bold text-base shadow-xs">
-                                  <Icon name="person" className="text-[26px]" />
-                                </div>
-                                <div className="flex flex-col text-xs">
-                                  <span className="font-bold text-sm text-slate-900 dark:text-white">
-                                    {todaySchedule.claimed_by_tutor_name}
-                                  </span>
-                                  <span className="text-emerald-600 font-semibold text-[11px] mt-0.5">Mentor Utama Aktif • Kurikulum Merdeka</span>
-                                </div>
-                              </div>
-                              <button
-                                onClick={() => openChatWithTutor(todaySchedule)}
-                                className="px-3.5 py-2 bg-white dark:bg-[#262a34] rounded-xl border border-slate-200 dark:border-transparent text-emerald-600 font-bold hover:bg-slate-100 flex items-center gap-1.5 cursor-pointer"
-                              >
-                                <Icon name="chat" className="text-[16px]" />
-                                <span>Chat Mentor</span>
-                              </button>
+                        {/* JIKA SISWA BELUM MEMILIKI JADWAL -> TAMPILKAN BANNER ATUR JADWAL MANDIRI */}
+                        {schedules.length === 0 ? (
+                          <div className="p-8 rounded-3xl bg-white dark:bg-[#181b25] border-2 border-dashed border-emerald-500/40 text-center space-y-4 shadow-sm">
+                            <div className="w-16 h-16 rounded-2xl bg-emerald-50 dark:bg-[#4edea3]/20 text-emerald-600 dark:text-[#4edea3] flex items-center justify-center mx-auto">
+                              <Icon name="event_available" className="text-[36px]" />
                             </div>
-                          ) : (
-                            <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-center gap-3.5 text-xs">
-                              <div className="w-11 h-11 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-bold shrink-0">
-                                <Icon name="hourglass_top" className="text-[22px]" />
+                            <div className="max-w-md mx-auto">
+                              <h3 className="text-lg font-bold">Akun Anda Sudah Aktif! 🎉</h3>
+                              <p className="text-xs text-slate-500 dark:text-[#bbcabf] mt-1">
+                                Pembayaran Anda telah disetujui. Sekarang silakan tentukan hari les, jam belajar, dan pilih mentor yang Anda inginkan.
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => {
+                                fetchTutorsForSelection();
+                                setShowCreateScheduleModal(true);
+                              }}
+                              className="py-3 px-6 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold shadow-md transition-all inline-flex items-center gap-2 cursor-pointer"
+                            >
+                              <Icon name="add_circle" className="text-[18px]" />
+                              <span>Atur Jadwal & Pilih Mentor Sekarang</span>
+                            </button>
+                          </div>
+                        ) : (
+                          /* KARTU SESI AKTIF & STATUS MENTOR */
+                          <div className="bg-white dark:bg-[#181b25] border border-slate-200 dark:border-[#31353f] rounded-2xl p-6 shadow-xs space-y-4">
+                            <div className="flex items-center justify-between">
+                              <span className="inline-flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-emerald-700 dark:text-[#4edea3]">
+                                <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 animate-ping"></span>
+                                Sesi Belajar Terjadwal
+                              </span>
+                              <span className="px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-[#4edea3] text-xs font-bold">
+                                {todaySchedule?.session_time ? `${todaySchedule.session_time.substring(0, 5)} WIB` : '16:00 WIB'}
+                              </span>
+                            </div>
+
+                            <div>
+                              <h3 className="font-bold text-lg">{todaySchedule?.today_topic || 'Bimbingan Belajar'}</h3>
+                              <p className="text-xs text-slate-500 mt-1">
+                                Jadwal rutin: {todaySchedule?.day_of_week} pukul {todaySchedule?.session_time?.substring(0, 5)} WIB.
+                              </p>
+                            </div>
+
+                            {/* SINKRONISASI MENTOR: TERIKAT ATAU MASUK BURSA */}
+                            {todaySchedule?.claimed_by_tutor_name && !todaySchedule?.is_substitute_needed ? (
+                              <div className="p-4 bg-slate-50 dark:bg-[#1c1f29] rounded-xl flex items-center justify-between border border-slate-200/60 dark:border-transparent">
+                                <div className="flex items-center gap-3.5">
+                                  <div className="w-12 h-12 rounded-xl bg-emerald-600 dark:bg-[#4edea3] text-white dark:text-[#003824] flex items-center justify-center font-bold text-base shadow-xs">
+                                    <Icon name="person" className="text-[26px]" />
+                                  </div>
+                                  <div className="flex flex-col text-xs">
+                                    <span className="font-bold text-sm text-slate-900 dark:text-white">
+                                      {todaySchedule.claimed_by_tutor_name}
+                                    </span>
+                                    <span className="text-emerald-600 font-semibold text-[11px] mt-0.5">Mentor Utama Aktif</span>
+                                  </div>
+                                </div>
+                                <button
+                                  onClick={() => openChatWithTutor(todaySchedule)}
+                                  className="px-3.5 py-2 bg-white dark:bg-[#262a34] rounded-xl border border-slate-200 dark:border-transparent text-emerald-600 font-bold hover:bg-slate-100 flex items-center gap-1.5 cursor-pointer"
+                                >
+                                  <Icon name="chat" className="text-[16px]" />
+                                  <span>Chat Mentor</span>
+                                </button>
                               </div>
-                              <div className="flex flex-col min-w-0">
-                                <span className="font-bold text-sm text-amber-800 dark:text-amber-400">
-                                  Sedang Dalam Proses Alokasi Mentor Baru
-                                </span>
-                                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
-                                  Mentor sedang dialokasikan ulang oleh Kepala Sekolah. Jadwal dan kuota KBM Anda tetap aman.
+                            ) : (
+                              <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-center gap-3.5 text-xs">
+                                <div className="w-11 h-11 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-bold shrink-0">
+                                  <Icon name="hourglass_top" className="text-[22px]" />
+                                </div>
+                                <div className="flex flex-col min-w-0">
+                                  <span className="font-bold text-sm text-amber-800 dark:text-amber-400">
+                                    Menunggu Pengambilan di Bursa Guru / Alokasi
+                                  </span>
+                                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
+                                    Jadwal Anda sudah terdaftar di bursa guru Cerdas Academy. Guru terdekat akan segera mengambil slot ini.
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* TOMBOL MASUK KELAS ONLINE JITSI MEET */}
+                            {todaySchedule && (
+                              <button
+                                onClick={() => setOnlineClassSchedule(todaySchedule)}
+                                className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
+                              >
+                                <Icon name="video_camera_front" className="text-[20px]" />
+                                <span>Masuk Ruang Kelas Online (Jitsi Meet)</span>
+                              </button>
+                            )}
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                              <div className="p-3 bg-slate-50 dark:bg-[#1c1f29] rounded-xl text-xs space-y-1">
+                                <span className="text-slate-400 font-semibold text-[10px] uppercase">Lokasi Pertemuan</span>
+                                <p className="font-bold text-slate-800 dark:text-white flex items-center gap-1">
+                                  <Icon name="home_pin" className="text-emerald-600 text-[16px]" />
+                                  {studentProfile?.address || 'Alamat Siswa'}
+                                </p>
+                              </div>
+                              <div className="p-3 bg-slate-50 dark:bg-[#1c1f29] rounded-xl text-xs space-y-1">
+                                <span className="text-slate-400 font-semibold text-[10px] uppercase">Status Pertemuan</span>
+                                <p className="font-bold text-slate-800 dark:text-white">
+                                  {todaySchedule?.completed_sessions || 0} / {todaySchedule?.target_sessions || 8} Sesi Selesai
                                 </p>
                               </div>
                             </div>
-                          )}
 
-                          {/* TOMBOL MASUK KELAS ONLINE JITSI MEET */}
-                          {todaySchedule && (
-                            <button
-                              onClick={() => setOnlineClassSchedule(todaySchedule)}
-                              className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
-                            >
-                              <Icon name="video_camera_front" className="text-[20px]" />
-                              <span>Masuk Ruang Kelas Online (Jitsi Meet)</span>
-                            </button>
-                          )}
-
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                            <div className="p-3 bg-slate-50 dark:bg-[#1c1f29] rounded-xl text-xs space-y-1">
-                              <span className="text-slate-400 font-semibold text-[10px] uppercase">Lokasi Pertemuan</span>
-                              <p className="font-bold text-slate-800 dark:text-white flex items-center gap-1">
-                                <Icon name="home_pin" className="text-emerald-600 text-[16px]" />
-                                {studentProfile?.address || 'Kelapa Gading Barat, Jakarta Utara'}
-                              </p>
-                            </div>
-                            <div className="p-3 bg-slate-50 dark:bg-[#1c1f29] rounded-xl text-xs space-y-1">
-                              <span className="text-slate-400 font-semibold text-[10px] uppercase">Akses Wali Murid</span>
+                            <div className="flex gap-2 pt-2 border-t border-slate-100 dark:border-[#31353f]/50">
                               <button
                                 onClick={() => {
-                                  if (todaySchedule?.parent_access_token) {
-                                    window.open(`${window.location.origin}/pantau/${todaySchedule.parent_access_token}`, '_blank');
-                                  } else {
-                                    alert('Tautan pantau orang tua akan aktif otomatis saat jadwal KBM berjalan.');
-                                  }
+                                  setRescheduleTargetSchedule(todaySchedule);
+                                  setShowRescheduleModal(true);
                                 }}
-                                className="font-bold text-emerald-600 hover:underline flex items-center gap-1 cursor-pointer"
+                                className="py-2.5 px-4 rounded-xl bg-slate-100 dark:bg-[#262a34] text-xs font-bold hover:bg-slate-200 transition-colors cursor-pointer flex items-center gap-1.5"
                               >
-                                <Icon name="family_restroom" className="text-[16px]" /> Buka Pantauan Ortu Langsung
+                                <Icon name="edit_calendar" className="text-[18px]" /> Ajukan Reschedule
+                              </button>
+                              <button
+                                onClick={() => {
+                                  fetchTutorsForSelection();
+                                  setShowCreateScheduleModal(true);
+                                }}
+                                className="py-2.5 px-4 rounded-xl bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-[#4edea3] text-xs font-bold hover:bg-emerald-100 transition-colors cursor-pointer flex items-center gap-1.5"
+                              >
+                                <Icon name="add" className="text-[18px]" /> Tambah Jadwal Baru
                               </button>
                             </div>
                           </div>
-
-                          <div className="flex gap-2 pt-2 border-t border-slate-100 dark:border-[#31353f]/50">
-                            <button
-                              onClick={() => {
-                                setRescheduleTargetSchedule(todaySchedule);
-                                setShowRescheduleModal(true);
-                              }}
-                              className="py-2.5 px-4 rounded-xl bg-slate-100 dark:bg-[#262a34] text-xs font-bold hover:bg-slate-200 transition-colors cursor-pointer flex items-center gap-1.5"
-                            >
-                              <Icon name="edit_calendar" className="text-[18px]" /> Ajukan Reschedule
-                            </button>
-                          </div>
-                        </div>
+                        )}
 
                         {/* 2. TUGAS & PR BERJALAN */}
                         <div className="bg-white dark:bg-[#181b25] border border-slate-200 dark:border-[#31353f] rounded-2xl p-6 shadow-xs space-y-4">
@@ -941,28 +1038,8 @@ export default function MuridDashboard() {
 
                           <div className="space-y-3 text-xs">
                             {assignments.length === 0 ? (
-                              <div className="p-4 rounded-xl bg-slate-50 dark:bg-[#1c1f29] space-y-2 border border-slate-200/60 dark:border-transparent">
-                                <div className="flex justify-between items-start">
-                                  <div>
-                                    <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600">Matematika • Latihan #04</span>
-                                    <h4 className="font-bold text-sm text-slate-900 dark:text-white mt-0.5">Latihan Aljabar Lanjutan Hal 42</h4>
-                                  </div>
-                                  <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-extrabold">+20 XP</span>
-                                </div>
-                                <div className="flex justify-between items-center pt-2">
-                                  <span className="text-rose-600 font-semibold flex items-center gap-1 text-[11px]">
-                                    <Icon name="schedule" className="text-[14px]" /> Batas: Besok, 12:00 WIB
-                                  </span>
-                                  <button
-                                    onClick={() => {
-                                      setTargetAssignment({ id: 'dummy', title: 'Latihan Aljabar Lanjutan Hal 42' });
-                                      setShowUploadPrModal(true);
-                                    }}
-                                    className="px-3.5 py-1.5 rounded-lg bg-[#006948] hover:bg-emerald-700 text-white dark:bg-[#4edea3] dark:text-[#003824] font-bold text-xs shadow-xs cursor-pointer"
-                                  >
-                                    Unggah Lembar Kerja
-                                  </button>
-                                </div>
+                              <div className="p-4 rounded-xl bg-slate-50 dark:bg-[#1c1f29] space-y-2 border border-slate-200/60 dark:border-transparent text-center text-slate-400">
+                                Belum ada tugas atau PR yang diberikan oleh tutor.
                               </div>
                             ) : (
                               assignments.map((ass) => (
@@ -1055,12 +1132,12 @@ export default function MuridDashboard() {
                               {goals.length === 0 ? (
                                 <>
                                   <div className="p-2.5 bg-slate-50 dark:bg-[#1c1f29] rounded-xl flex items-center justify-between">
-                                    <span className="line-through text-slate-400">Review Bab 3 Gerak Lurus</span>
+                                    <span className="line-through text-slate-400">Review Pemahaman Awal</span>
                                     <span className="font-semibold text-emerald-600 text-[11px]">Selesai</span>
                                   </div>
                                   <div className="p-2.5 bg-slate-50 dark:bg-[#1c1f29] rounded-xl flex items-center justify-between">
-                                    <span className="line-through text-slate-400">Modul Aljabar Hal 40-42</span>
-                                    <span className="font-semibold text-emerald-600 text-[11px]">Selesai</span>
+                                    <span>Latihan 5 Soal Mandiri</span>
+                                    <span className="font-semibold text-amber-600 text-[11px]">Berjalan</span>
                                   </div>
                                 </>
                               ) : (
@@ -1195,26 +1272,20 @@ export default function MuridDashboard() {
                       </div>
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => setScheduleFilter('mendatang')}
-                          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                            scheduleFilter === 'mendatang' ? 'bg-emerald-600 text-white' : 'bg-white dark:bg-[#181b25] border border-slate-200 dark:border-[#31353f]'
-                          }`}
+                          onClick={() => {
+                            fetchTutorsForSelection();
+                            setShowCreateScheduleModal(true);
+                          }}
+                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
                         >
-                          Mendatang ({schedules.length})
-                        </button>
-                        <button
-                          onClick={() => setScheduleFilter('riwayat')}
-                          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                            scheduleFilter === 'riwayat' ? 'bg-emerald-600 text-white' : 'bg-white dark:bg-[#181b25] border border-slate-200 dark:border-[#31353f]'
-                          }`}
-                        >
-                          Riwayat Selesai ({schedules.filter(s => s.completed_sessions > 0).length})
+                          <Icon name="add" className="text-[18px]" />
+                          <span>Buat Jadwal Baru</span>
                         </button>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-6 gap-2">
-                      {DAYS_NAME.slice(0, 6).map((d, idx) => (
+                    <div className="grid grid-cols-7 gap-2">
+                      {DAYS_NAME.map((d, idx) => (
                         <button
                           key={idx}
                           onClick={() => setActiveCalendarDay(d)}
@@ -1231,43 +1302,49 @@ export default function MuridDashboard() {
                     </div>
 
                     <div className="space-y-3">
-                      {schedules.map((s) => (
-                        <div key={s.id} className="p-5 rounded-2xl bg-white dark:bg-[#181b25] border border-slate-200 dark:border-[#31353f] shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-bold text-amber-600">{s.day_of_week} • {s.session_time?.substring(0, 5) || '16:00'} WIB</span>
-                              <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 text-[10px] font-bold">
-                                {s.completed_sessions || 0} / {s.target_sessions || 8} Sesi Selesai
-                              </span>
-                            </div>
-                            <h4 className="text-base font-bold mt-1">{s.today_topic || 'Bimbingan Matematika & Sains'}</h4>
-                            <p className="text-xs text-slate-500">Tutor: {s.claimed_by_tutor_name || 'Tutor Terikat'}</p>
-                          </div>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => setOnlineClassSchedule(s)}
-                              className="px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold flex items-center gap-1 hover:bg-emerald-700 cursor-pointer"
-                            >
-                              <Icon name="video_camera_front" className="text-[16px]" /> Kelas Online
-                            </button>
-                            <button
-                              onClick={() => {
-                                setRescheduleTargetSchedule(s);
-                                setShowRescheduleModal(true);
-                              }}
-                              className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-[#262a34] text-xs font-bold hover:bg-slate-200 cursor-pointer"
-                            >
-                              Ajukan Reschedule
-                            </button>
-                            <button
-                              onClick={() => openChatWithTutor(s)}
-                              className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-[#262a34] text-xs font-bold flex items-center gap-1 hover:bg-slate-200 cursor-pointer"
-                            >
-                              <Icon name="chat" className="text-[16px]" /> Chat
-                            </button>
-                          </div>
+                      {schedules.length === 0 ? (
+                        <div className="p-8 bg-white dark:bg-[#181b25] border border-slate-200 dark:border-[#31353f] rounded-2xl text-center text-xs text-slate-400">
+                          Belum ada jadwal yang diatur. Klik tombol "Buat Jadwal Baru" di atas!
                         </div>
-                      ))}
+                      ) : (
+                        schedules.map((s) => (
+                          <div key={s.id} className="p-5 rounded-2xl bg-white dark:bg-[#181b25] border border-slate-200 dark:border-[#31353f] shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold text-amber-600">{s.day_of_week} • {s.session_time?.substring(0, 5) || '16:00'} WIB</span>
+                                <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 text-[10px] font-bold">
+                                  {s.completed_sessions || 0} / {s.target_sessions || 8} Sesi Selesai
+                                </span>
+                              </div>
+                              <h4 className="text-base font-bold mt-1">{s.today_topic || 'Bimbingan Belajar'}</h4>
+                              <p className="text-xs text-slate-500">Tutor: {s.claimed_by_tutor_name || 'Menunggu Pengambilan di Bursa'}</p>
+                            </div>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => setOnlineClassSchedule(s)}
+                                className="px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold flex items-center gap-1 hover:bg-emerald-700 cursor-pointer"
+                              >
+                                <Icon name="video_camera_front" className="text-[16px]" /> Kelas Online
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setRescheduleTargetSchedule(s);
+                                  setShowRescheduleModal(true);
+                                }}
+                                className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-[#262a34] text-xs font-bold hover:bg-slate-200 cursor-pointer"
+                              >
+                                Ajukan Reschedule
+                              </button>
+                              <button
+                                onClick={() => openChatWithTutor(s)}
+                                className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-[#262a34] text-xs font-bold flex items-center gap-1 hover:bg-slate-200 cursor-pointer"
+                              >
+                                <Icon name="chat" className="text-[16px]" /> Chat
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      )}
                     </div>
                   </div>
                 )}
@@ -1293,22 +1370,8 @@ export default function MuridDashboard() {
                     {taskSubTab === 'tugas' && (
                       <div className="space-y-3">
                         {assignments.length === 0 ? (
-                          <div className="p-6 bg-white dark:bg-[#181b25] border border-slate-200 dark:border-[#31353f] rounded-2xl shadow-xs space-y-3">
-                            <div className="flex justify-between items-center text-xs font-bold text-amber-600">
-                              <span>Besok, 12:00 WIB</span>
-                              <span>+20 XP</span>
-                            </div>
-                            <h3 className="text-base font-bold">Latihan Aljabar Lanjutan Hal 42</h3>
-                            <p className="text-xs text-slate-500">5 Soal uraian pemfaktoran bentuk kuadrat sempurna & grafik parabola.</p>
-                            <button
-                              onClick={() => {
-                                setTargetAssignment({ id: 'dummy', title: 'Aljabar Lanjutan Hal 42' });
-                                setShowUploadPrModal(true);
-                              }}
-                              className="px-4 py-2.5 rounded-xl bg-[#006948] text-white font-bold text-xs shadow-xs hover:bg-emerald-700 transition-all cursor-pointer"
-                            >
-                              Unggah Lembar Jawaban PR
-                            </button>
+                          <div className="p-8 bg-white dark:bg-[#181b25] border border-slate-200 dark:border-[#31353f] rounded-2xl text-center text-xs text-slate-400">
+                            Belum ada tugas aktif yang diberikan guru bimbingan.
                           </div>
                         ) : (
                           assignments.map((ass) => (
@@ -1419,7 +1482,7 @@ export default function MuridDashboard() {
                         <div>
                           <h2 className="text-lg font-bold">{studentProfile?.student_name || 'Murid Cerdas'}</h2>
                           <span className="text-xs font-bold text-emerald-600">ID Siswa: #CRD-89421</span>
-                          <p className="text-xs text-slate-400 mt-0.5">Kelas 8 SMP • Juara Matematika</p>
+                          <p className="text-xs text-slate-400 mt-0.5">{studentProfile?.grade || 'Siswa'} • Cerdas Academy</p>
                         </div>
                       </div>
 
@@ -1513,6 +1576,86 @@ export default function MuridDashboard() {
             </div>
           </nav>
         )}
+
+        {/* MODAL PENGATURAN JADWAL MANDIRI & PILIH MENTOR */}
+        <AnimatePresence>
+          {showCreateScheduleModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+              <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="w-full max-w-md rounded-3xl bg-white dark:bg-[#181b25] border border-slate-200 dark:border-[#31353f] p-6 space-y-4 text-xs">
+                <div className="flex justify-between items-center border-b border-slate-100 dark:border-[#31353f] pb-3">
+                  <h3 className="font-bold text-sm">Pengaturan Jadwal KBM Mandiri</h3>
+                  <button onClick={() => setShowCreateScheduleModal(false)} className="cursor-pointer"><Icon name="close" /></button>
+                </div>
+
+                <form onSubmit={handleSaveNewSchedule} className="space-y-3">
+                  <div>
+                    <label className="font-semibold block mb-1">Mata Pelajaran / Topik Belajar</label>
+                    <input
+                      type="text"
+                      required
+                      value={newScheduleTopic}
+                      onChange={(e) => setNewScheduleTopic(e.target.value)}
+                      placeholder="Contoh: Matematika & Sains Dasar"
+                      className="w-full p-2.5 rounded-xl border bg-slate-50 dark:bg-[#1c1f29] border-slate-200 dark:border-[#31353f]"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="font-semibold block mb-1">Pilih Hari Les</label>
+                      <select
+                        value={newScheduleDay}
+                        onChange={(e) => setNewScheduleDay(e.target.value)}
+                        className="w-full p-2.5 rounded-xl border bg-slate-50 dark:bg-[#1c1f29] border-slate-200 dark:border-[#31353f] font-semibold"
+                      >
+                        {DAYS_NAME.map((d) => (
+                          <option key={d} value={d}>{d}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="font-semibold block mb-1">Jam / Pukul (WIB)</label>
+                      <input
+                        type="text"
+                        value={newScheduleTime}
+                        onChange={(e) => setNewScheduleTime(e.target.value)}
+                        placeholder="16:00"
+                        className="w-full p-2.5 rounded-xl border bg-slate-50 dark:bg-[#1c1f29] border-slate-200 dark:border-[#31353f]"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="font-semibold block mb-1">Pilih Mentor Bimbingan (Opsional)</label>
+                    <select
+                      value={selectedTutorChoice}
+                      onChange={(e) => setSelectedTutorChoice(e.target.value)}
+                      className="w-full p-2.5 rounded-xl border bg-slate-50 dark:bg-[#1c1f29] border-slate-200 dark:border-[#31353f] font-semibold"
+                    >
+                      <option value="">-- Buka ke Bursa Guru (Dipilihkan Guru Terdekat) --</option>
+                      {availableTutors.map((t) => (
+                        <option key={t.id} value={t.full_name}>
+                          {t.full_name} ({t.campus} • {t.major})
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      Jika dikosongkan, jadwalmu akan masuk ke bursa agar guru yang berlokasi paling dekat bisa mengambilnya.
+                    </p>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={savingNewSchedule}
+                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md cursor-pointer transition-all"
+                  >
+                    {savingNewSchedule ? 'Menyimpan Jadwal...' : 'Konfirmasi Jadwal Belajar'}
+                  </button>
+                </form>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
 
         {/* MODAL KELAS ONLINE JITSI MEET */}
         <AnimatePresence>
@@ -1778,8 +1921,7 @@ export default function MuridDashboard() {
                   <div className="flex justify-between border-b pb-1"><span>Nama Siswa:</span><span className="font-bold">{studentProfile.student_name}</span></div>
                   <div className="flex justify-between border-b pb-1"><span>WhatsApp:</span><span className="font-bold">{studentProfile.phone_number}</span></div>
                   <div className="flex justify-between border-b pb-1"><span>Paket Belajar:</span><span className="font-bold">{studentProfile.selected_package}</span></div>
-                  <div className="flex justify-between border-b pb-1"><span>Jadwal Sesi:</span><span className="font-bold">{studentProfile.selected_days}</span></div>
-                  <div className="flex justify-between pt-1 text-sm font-extrabold text-emerald-700"><span>Status:</span><span>LUNAS & TERVERIFIKASI</span></div>
+                  <div className="flex justify-between pt-1 text-sm font-extrabold text-emerald-700"><span>Status:</span><span>TERVERIFIKASI & AKTIF</span></div>
                 </div>
 
                 <button onClick={() => window.print()} className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl print:hidden flex items-center justify-center gap-1.5 cursor-pointer shadow-md">

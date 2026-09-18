@@ -296,18 +296,13 @@ export default function AdminDashboard() {
 
   // ================= LOGIKA PEMBERSIHAN & SINKRONISASI RELASI AKUN =================
 
-  // 1. Hapus Akun Murid -> Bersihkan semua relasi KBM dan histori tugas terkait
+  // 1. Hapus Akun Murid -> Bersihkan seluruh relasi KBM
   const handleDeleteStudentAccount = async (student: any) => {
-    if (!window.confirm(`PERINGATAN: Menghapus akun murid "${student.student_name}" akan otomatis menghapus seluruh jadwal KBM dan membebaskan mentor yang bersangkutan. Lanjutkan?`)) return;
+    if (!window.confirm(`PERINGATAN: Menghapus akun murid "${student.student_name}" akan otomatis membersihkan seluruh jadwal KBM dan membebaskan mentor yang bersangkutan. Lanjutkan?`)) return;
 
     try {
-      // Hapus data pendaftaran
       await supabase.from('registrations').delete().eq('id', student.id);
-      
-      // Bersihkan jadwal murid di tabel schedules
       await supabase.from('schedules').delete().eq('student_name', student.student_name);
-
-      // Bersihkan gamifikasi
       await supabase.from('student_gamification').delete().eq('student_name', student.student_name);
 
       await logActivity(
@@ -323,17 +318,15 @@ export default function AdminDashboard() {
     }
   };
 
-  // 2. Hapus Akun Mentor/Tutor -> Jangan hapus jadwal murid, melainkan ubah status jadwal murid menjadi OPEN / BUTUH MENTOR PENGGANTI
+  // 2. Hapus Akun Tutor -> Ubah status murid menjadi BUTUH MENTOR PENGGANTI (Tanpa hapus jadwal murid)
   const handleDeleteTutorAccount = async (tutor: any) => {
-    if (!window.confirm(`PERINGATAN: Mentor "${tutor.full_name}" akan dihapus. Murid yang dibimbing mentor ini akan otomatis dialihkan ke status "BUTUH MENTOR PENGGANTI" agar Kepala Sekolah dapat mengalokasikan mentor baru. Lanjutkan?`)) return;
+    if (!window.confirm(`PERINGATAN: Mentor "${tutor.full_name}" akan dihapus. Murid yang dibimbing mentor ini akan dialihkan ke status "BUTUH MENTOR PENGGANTI". Lanjutkan?`)) return;
 
     try {
-      // Cari murid-murid yang dibimbing tutor ini
       const affectedSchedules = schedules.filter(
         s => s.claimed_by_tutor_name === tutor.full_name || s.substitute_tutor_name === tutor.full_name
       );
 
-      // Update jadwal murid yang terdampak menjadi unassigned / open
       for (const sch of affectedSchedules) {
         await supabase
           .from('schedules')
@@ -347,25 +340,23 @@ export default function AdminDashboard() {
           })
           .eq('id', sch.id);
 
-        // Beri tahu Kepala Sekolah melalui catatan log insiden
         await logActivity(
           'RELASI_TERPUTUS',
-          `Mentor ${tutor.full_name} keluar/dihapus. Murid ${sch.student_name} kini berstatus butuh mentor baru.`,
+          `Mentor ${tutor.full_name} dihapus. Murid ${sch.student_name} kini berstatus butuh mentor baru.`,
           sch.student_name
         );
       }
 
-      // Hapus akun tutor dari tabel aplikasi
       await supabase.from('tutor_applications').delete().eq('id', tutor.id);
 
-      alert(`Akun mentor ${tutor.full_name} dihapus. ${affectedSchedules.length} murid yang terdampak berhasil dialihkan ke antrean alokasi mentor baru.`);
+      alert(`Akun mentor ${tutor.full_name} dihapus. ${affectedSchedules.length} murid dialihkan ke antrean alokasi.`);
       fetchDashboardData();
     } catch (err: any) {
       alert('Gagal menghapus mentor: ' + err.message);
     }
   };
 
-  // 3. Otorisasi Alokasi Mentor Baru Secara Manual (Re-Assign Mentor)
+  // 3. Alokasikan Mentor Baru Secara Manual (Re-Assign Mentor)
   const handleExecuteReassignMentor = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!reassignModalTarget || !selectedNewMentor) {
@@ -386,21 +377,21 @@ export default function AdminDashboard() {
 
       await logActivity(
         'MUTASI_MENTOR',
-        `Kepala Sekolah menugaskan mentor baru "${selectedNewMentor}" untuk membimbing murid "${reassignModalTarget.student_name}"`,
+        `Kepala Sekolah menugaskan mentor baru "${selectedNewMentor}" untuk murid "${reassignModalTarget.student_name}"`,
         reassignModalTarget.student_name
       );
 
       confetti({ particleCount: 80, spread: 60 });
       alert(`Murid ${reassignModalTarget.student_name} berhasil dialokasikan ke mentor ${selectedNewMentor}!`);
 
-      // Otomatis kirim pesan WA konfirmasi ke orang tua/murid
       if (reassignModalTarget.student_phone) {
         const phoneWA = formatWA(reassignModalTarget.student_phone);
         const textWA = encodeURIComponent(
           `Halo ${reassignModalTarget.student_name}! 🎓\n\n` +
-          `Kami menginformasikan bahwa sesi les privat Anda kini telah resmi dialokasikan kepada mentor baru: *${selectedNewMentor}*.\n\n` +
-          `Jadwal KBM Anda tetap berjalan normal: *${reassignModalTarget.day_of_week}* pukul *${reassignModalTarget.session_time?.substring(0, 5)} WIB*.\n\n` +
-          `Terima kasih!\n- Kepala Akademik Cerdas Academy`
+          `Sesi les privat Anda kini telah resmi dialokasikan kepada mentor: *${selectedNewMentor}*.\n\n` +
+          `Jadwal KBM: *${reassignModalTarget.day_of_week}* pukul *${reassignModalTarget.session_time?.substring(0, 5)} WIB*.\n\n` +
+          `Pantau langsung di portal: https://cerdas-academy.vercel.app/murid\n\n` +
+          `Terima kasih!\n- Kepala Sekolah Cerdas Academy`
         );
         window.open(`https://wa.me/${phoneWA}?text=${textWA}`, '_blank');
       }
@@ -415,10 +406,10 @@ export default function AdminDashboard() {
     }
   };
 
-  // 4. Copot Mentor dari Siswa (Tanpa Menghapus Akun Mentor)
+  // 4. Copot Mentor dari Siswa
   const handleDetachMentorFromStudent = async (sch: any) => {
     const tutorName = sch.claimed_by_tutor_name;
-    if (!window.confirm(`Lepaskan mentor "${tutorName}" dari murid "${sch.student_name}"? Murid akan masuk antrean pemilihan mentor baru.`)) return;
+    if (!window.confirm(`Lepaskan mentor "${tutorName}" dari murid "${sch.student_name}"? Murid akan masuk antrean alokasi baru.`)) return;
 
     try {
       await supabase
@@ -435,18 +426,98 @@ export default function AdminDashboard() {
 
       await logActivity(
         'LEPAS_MENTOR',
-        `Mencopot ikatan mentor ${tutorName} dari murid ${sch.student_name}. Murid kini butuh mentor baru.`,
+        `Mencopot ikatan mentor ${tutorName} dari murid ${sch.student_name}.`,
         sch.student_name
       );
 
-      alert(`Ikatan bimbingan dilepas. Murid ${sch.student_name} kini siap dipasangkan dengan mentor baru.`);
+      alert(`Ikatan bimbingan dilepas. Murid ${sch.student_name} siap dipasangkan dengan mentor baru.`);
       fetchDashboardData();
     } catch (err: any) {
       alert('Gagal: ' + err.message);
     }
   };
 
-  // ================= END LOGIKA SINKRONISASI RELASI =================
+  // ================= ALUR BARU: VERIFIKASI / ACC MURID TANPA MEMAKSA JADWAL =================
+  const handleVerifyStudent = async (student: any) => {
+    setActionLoading(student.id);
+    try {
+      // 1. Cukup aktifkan status akun murid (Tanpa auto-insert schedule paksa)
+      await supabase
+        .from('registrations')
+        .update({ 
+          is_approved: true,
+          is_verified: true,
+          status: 'verified' 
+        })
+        .eq('id', student.id);
+
+      // 2. Buat inisialisasi akun gamifikasi jika belum ada
+      await supabase.from('student_gamification').upsert({
+        student_name: student.student_name,
+        student_phone: student.phone_number,
+        xp_points: 50,
+        level: 1,
+        badges: ['Siswa Baru Cerdas'],
+      }, { onConflict: 'student_name' });
+
+      await logActivity(
+        'VERIFIKASI_MURID', 
+        `ACC pendaftaran & aktivasi akun murid ${student.student_name}. Murid diundang mengatur jadwal mandiri.`, 
+        student.student_name
+      );
+
+      confetti({ particleCount: 90, spread: 70, origin: { y: 0.6 } });
+
+      // 3. Kirim notifikasi WhatsApp ke Murid mengarah ke DOMAIN LIVE
+      const phoneWA = formatWA(student.phone_number);
+      const textWA = encodeURIComponent(
+        `Halo Kak *${student.student_name}*! 🎉\n\n` +
+        `Pendaftaran bimbingan belajar Cerdas Academy Anda telah *DISETUJUI* oleh Kepala Sekolah!\n\n` +
+        `Akun belajar Anda telah aktif. Silakan login ke Portal Murid untuk menentukan hari les dan memilih mentor idola Anda:\n` +
+        `👉 https://cerdas-academy.vercel.app/murid\n\n` +
+        `Terima kasih dan selamat belajar!`
+      );
+      window.open(`https://wa.me/${phoneWA}?text=${textWA}`, '_blank');
+
+      alert(`Akun murid ${student.student_name} berhasil di-ACC! Murid kini bisa masuk dan mengatur jadwalnya sendiri.`);
+      fetchDashboardData();
+    } catch (err: any) {
+      alert('Gagal memverifikasi murid: ' + err.message);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Verifikasi Guru
+  const handleVerifyTutor = async (tutor: any) => {
+    setActionLoading(tutor.id);
+    try {
+      await supabase
+        .from('tutor_applications')
+        .update({ is_approved: true, status: 'verified' })
+        .eq('id', tutor.id);
+
+      await logActivity('VERIFIKASI_GURU', `ACC tutor ${tutor.full_name}`, tutor.full_name);
+
+      confetti({ particleCount: 80, spread: 60 });
+      const phoneWA = formatWA(tutor.phone_number);
+      const textWA = encodeURIComponent(
+        `Halo Kak *${tutor.full_name}*! 🎓\n\n` +
+        `Pendaftaran Mitra Guru Cerdas Academy Anda telah *DISETUJUI* oleh Kepala Sekolah!\n\n` +
+        `Silakan masuk ke Portal Pengajar untuk melihat bursa jadwal murid dan mengelola bimbingan:\n` +
+        `👉 https://cerdas-academy.vercel.app/guru\n\n` +
+        `Selamat mengajar!`
+      );
+      window.open(`https://wa.me/${phoneWA}?text=${textWA}`, '_blank');
+
+      alert(`Akun guru ${tutor.full_name} berhasil diaktifkan!`);
+      fetchDashboardData();
+    } catch (err: any) {
+      alert('Gagal: ' + err.message);
+    } finally {
+      setActionLoading(null);
+    }
+  };
 
   // Evaluasi Guru
   const handleSubmitEvaluation = async (e: React.FormEvent) => {
@@ -480,75 +551,6 @@ export default function AdminDashboard() {
       alert('Gagal menyimpan evaluasi: ' + err.message);
     } finally {
       setSubmittingEval(false);
-    }
-  };
-
-  // Verifikasi Murid Baru
-  const handleVerifyStudent = async (student: any) => {
-    setActionLoading(student.id);
-    try {
-      await supabase.from('registrations').update({ is_verified: true }).eq('id', student.id);
-      const now = new Date();
-      const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-
-      await supabase.from('schedules').insert([
-        {
-          student_name: student.student_name,
-          student_phone: student.phone_number,
-          student_address: student.address,
-          maps_url: student.maps_url,
-          day_of_week: student.selected_days || 'Belum diatur',
-          session_time: student.selected_time || '16:30',
-          month_period: firstDayOfMonth,
-          status: 'open',
-          tutor_fee: 30000,
-          completed_sessions: 0,
-          target_sessions: 8,
-          is_honor_paid: false,
-        },
-      ]);
-
-      await supabase.from('student_gamification').upsert({
-        student_name: student.student_name,
-        student_phone: student.phone_number,
-        xp_points: 50,
-        level: 1,
-        badges: ['Siswa Baru Cerdas'],
-      }, { onConflict: 'student_name' });
-
-      await logActivity('VERIFIKASI_MURID', `ACC pendaftaran murid ${student.student_name}`, student.student_name);
-
-      confetti({ particleCount: 90, spread: 70, origin: { y: 0.6 } });
-
-      const phoneWA = formatWA(student.phone_number);
-      const textWA = encodeURIComponent(`Halo ${student.student_name}! Pendaftaran les privat Anda di Cerdas Academy telah di-ACC. Buka portal murid: http://localhost:3000/murid`);
-      window.open(`https://wa.me/${phoneWA}?text=${textWA}`, '_blank');
-
-      fetchDashboardData();
-    } catch (err: any) {
-      alert('Gagal: ' + err.message);
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  // Verifikasi Guru
-  const handleVerifyTutor = async (tutor: any) => {
-    setActionLoading(tutor.id);
-    try {
-      await supabase.from('tutor_applications').update({ is_approved: true }).eq('id', tutor.id);
-      await logActivity('VERIFIKASI_GURU', `ACC tutor ${tutor.full_name}`, tutor.full_name);
-
-      confetti({ particleCount: 80, spread: 60 });
-      const phoneWA = formatWA(tutor.phone_number);
-      const textWA = encodeURIComponent(`Halo Kak ${tutor.full_name}! Akun pengajar Cerdas Academy Anda telah aktif. Buka: http://localhost:3000/guru`);
-      window.open(`https://wa.me/${phoneWA}?text=${textWA}`, '_blank');
-
-      fetchDashboardData();
-    } catch (err: any) {
-      alert('Gagal: ' + err.message);
-    } finally {
-      setActionLoading(null);
     }
   };
 
@@ -613,7 +615,7 @@ export default function AdminDashboard() {
       `Halo ${sch.student_name}! ⏰\n\nPengingat sesi les privat bersama *${sch.claimed_by_tutor_name || 'Tutor Cerdas Academy'}*:\n` +
       `🗓️ Hari: *${sch.day_of_week}*\n` +
       `⏰ Jam: *${sch.session_time?.substring(0, 5)} WIB*\n\n` +
-      `Siapkan meja belajar dan perlengkapan Anda!`
+      `Siapkan meja belajar dan materi yang ingin dibahas!`
     );
     window.open(`https://wa.me/${phoneWA}?text=${textWA}`, '_blank');
   };
@@ -671,9 +673,9 @@ export default function AdminDashboard() {
       'Nama Murid': r.student_name,
       'Kontak WA': r.phone_number,
       'Paket': r.selected_package || '-',
-      'Status': r.is_verified ? 'Lunas' : 'Pending',
-      'Pemasukan Lembaga (Rp)': r.is_verified ? 360000 : 0,
-      'Honor Tutor (Rp)': r.is_verified ? 240000 : 0,
+      'Status': r.is_approved || r.is_verified ? 'Terverifikasi' : 'Pending',
+      'Pemasukan Lembaga (Rp)': (r.is_approved || r.is_verified) ? 360000 : 0,
+      'Honor Tutor (Rp)': (r.is_approved || r.is_verified) ? 240000 : 0,
     }));
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
@@ -682,13 +684,12 @@ export default function AdminDashboard() {
   };
 
   // Kalkulasi & Status
-  const verifiedStudents = registrations.filter((r) => r.is_verified);
-  const pendingStudents = registrations.filter((r) => !r.is_verified);
+  const verifiedStudents = registrations.filter((r) => r.is_approved || r.is_verified);
+  const pendingStudents = registrations.filter((r) => !r.is_approved && !r.is_verified);
   const approvedTutors = tutors.filter((t) => t.is_approved);
   const pendingTutors = tutors.filter((t) => !t.is_approved);
   const pendingReschedules = reschedules.filter((r) => r.status === 'pending');
   const pendingComplaints = complaints.filter((c) => c.status === 'pending');
-  const pendingHomeworkHelps = homeworkHelpList.filter((h) => h.status === 'pending');
 
   // Relasi & Siswa Butuh Mentor Pengganti
   const unassignedStudents = schedules.filter((s) => !s.claimed_by_tutor_name || s.is_substitute_needed);
@@ -728,7 +729,7 @@ export default function AdminDashboard() {
                     <label className="font-semibold block mb-1">Kata Sandi</label>
                     <div className="relative flex items-center">
                       <input type={showPassword ? 'text' : 'password'} required value={inputPw} onChange={(e) => setInputPw(e.target.value)} placeholder="Masukkan Sandi..." className="w-full p-2.5 pr-10 rounded-xl border bg-slate-50 dark:bg-[#1c1f29] border-slate-200 dark:border-[#31353f] font-semibold outline-none focus:border-emerald-600" />
-                      <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 text-slate-400">{showPassword ? <Icon name="visibility_off" className="text-[18px]" /> : <Icon name="visibility" className="text-[18px]" />}</button>
+                      <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 text-slate-400 cursor-pointer">{showPassword ? <Icon name="visibility_off" className="text-[18px]" /> : <Icon name="visibility" className="text-[18px]" />}</button>
                     </div>
                   </div>
                 </>
@@ -943,7 +944,7 @@ export default function AdminDashboard() {
                       </span>
                     </div>
                     <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">
-                      Mentor sebelumnya mengundurkan diri/dihapus, atau murid baru saja di-ACC dan belum terikat pengajar. Silakan alokasikan mentor pengganti agar KBM tidak terhambat.
+                      Murid baru saja menentukan jadwal mandiri atau mentor sebelumnya dilepas. Silakan alokasikan mentor agar KBM berjalan lancar.
                     </p>
                   </div>
                 </div>
@@ -957,7 +958,7 @@ export default function AdminDashboard() {
             )}
 
             {/* ========================================================================= */}
-            {/* 1. TAB BARU: PEMETAAN & MONITORING RELASI MURID ↔ MENTOR (FITUR UTAMA) */}
+            {/* 1. TAB: PEMETAAN & MONITORING RELASI MURID ↔ MENTOR (FITUR UTAMA) */}
             {/* ========================================================================= */}
             {activeTab === 'monitoring_relasi' && (
               <div className="space-y-6">
@@ -965,7 +966,7 @@ export default function AdminDashboard() {
                   <div>
                     <h1 className="text-2xl font-extrabold tracking-tight">Konsol Pemantauan Relasi: Murid ↔ Mentor</h1>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      Pantau siapa membimbing siapa secara real-time. Jika mentor keluar/dihapus, murid otomatis masuk antrean alokasi ulang.
+                      Pantau siapa membimbing siapa secara real-time. Murid mengatur jadwal mandiri, guru mengambil slot, dan Kepala Sekolah memvalidasi relasi.
                     </p>
                   </div>
                   <span className="px-3 py-1.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-[#4edea3] text-xs font-bold border border-emerald-200/60 dark:border-emerald-900">
@@ -1006,6 +1007,9 @@ export default function AdminDashboard() {
                                 Belum Ada Mentor
                               </span>
                             </div>
+                            <p className="text-slate-600 dark:text-slate-300">
+                              <b>Topik:</b> {sch.today_topic || 'Bimbingan Belajar'}
+                            </p>
                             <p className="text-slate-600 dark:text-slate-300">
                               <b>Jadwal:</b> {sch.day_of_week} • Pukul {sch.session_time?.substring(0, 5)} WIB
                             </p>
@@ -1090,10 +1094,13 @@ export default function AdminDashboard() {
 
                           <div className="p-2.5 bg-white dark:bg-[#0f131c] rounded-xl border border-slate-200 dark:border-transparent text-[11px] space-y-0.5">
                             <p className="text-slate-600 dark:text-slate-300">
+                              <b>Topik:</b> {sch.today_topic || 'Bimbingan Belajar'}
+                            </p>
+                            <p className="text-slate-600 dark:text-slate-300">
                               <b>Waktu:</b> {sch.day_of_week} • Pukul {sch.session_time?.substring(0, 5)} WIB
                             </p>
                             <p className="text-slate-500 truncate">
-                              <b>Lokasi:</b> {sch.student_address}
+                              <b>Alamat:</b> {sch.student_address}
                             </p>
                           </div>
                         </div>
@@ -1104,14 +1111,14 @@ export default function AdminDashboard() {
                               setReassignModalTarget(sch);
                               setSelectedNewMentor(approvedTutors.find(t => t.full_name !== sch.claimed_by_tutor_name)?.full_name || '');
                             }}
-                            className="flex-1 py-1.5 bg-slate-200 dark:bg-[#262a34] hover:bg-slate-300 text-slate-800 dark:text-white font-bold rounded-lg transition-all"
+                            className="flex-1 py-1.5 bg-slate-200 dark:bg-[#262a34] hover:bg-slate-300 text-slate-800 dark:text-white font-bold rounded-lg transition-all cursor-pointer"
                             title="Ganti ke mentor lain"
                           >
                             Ganti Mentor
                           </button>
                           <button
                             onClick={() => handleDetachMentorFromStudent(sch)}
-                            className="px-2.5 py-1.5 bg-rose-50 dark:bg-rose-950/40 text-rose-600 hover:bg-rose-100 rounded-lg border border-rose-200 dark:border-rose-900 font-bold"
+                            className="px-2.5 py-1.5 bg-rose-50 dark:bg-rose-950/40 text-rose-600 hover:bg-rose-100 rounded-lg border border-rose-200 dark:border-rose-900 font-bold cursor-pointer"
                             title="Copot ikatan mentor"
                           >
                             Copot
@@ -1191,8 +1198,8 @@ export default function AdminDashboard() {
                           </div>
                           <div className="text-right">
                             <span className="font-bold text-emerald-600 block">Rp 360.000</span>
-                            <span className={`text-[10px] font-bold ${r.is_verified ? 'text-emerald-700' : 'text-amber-600'}`}>
-                              {r.is_verified ? 'Lunas Reconciled' : 'Menunggu ACC'}
+                            <span className={`text-[10px] font-bold ${r.is_approved || r.is_verified ? 'text-emerald-700' : 'text-amber-600'}`}>
+                              {r.is_approved || r.is_verified ? 'Lunas Reconciled' : 'Menunggu ACC'}
                             </span>
                           </div>
                         </div>
@@ -1370,7 +1377,7 @@ export default function AdminDashboard() {
               <div className="bg-white dark:bg-[#181b25] p-6 rounded-3xl border border-slate-200 dark:border-[#31353f] shadow-xs space-y-4">
                 <div>
                   <h2 className="font-bold text-base">Validasi Pembayaran & Aktivasi Murid Baru</h2>
-                  <p className="text-xs text-slate-400 mt-0.5">Konfirmasi mutasi pembayaran sebelum membuka slot mengajar ke bursa guru</p>
+                  <p className="text-xs text-slate-400 mt-0.5">Konfirmasi mutasi pembayaran sebelum mengaktifkan akun murid untuk menyusun jadwal mandiri</p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
@@ -1382,11 +1389,11 @@ export default function AdminDashboard() {
                             <h4 className="font-bold text-sm">{item.student_name}</h4>
                             <p className="text-slate-400">WA: {item.phone_number}</p>
                           </div>
-                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${item.is_verified ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
-                            {item.is_verified ? 'Terverifikasi' : 'Menunggu ACC'}
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${item.is_approved || item.is_verified ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                            {item.is_approved || item.is_verified ? 'Terverifikasi' : 'Menunggu ACC'}
                           </span>
                         </div>
-                        <p className="text-slate-600 dark:text-slate-300"><b>Paket:</b> {item.selected_package} ({item.selected_days})</p>
+                        <p className="text-slate-600 dark:text-slate-300"><b>Paket:</b> {item.selected_package} ({item.grade || 'Kelas Sekolah'})</p>
                         <p className="text-slate-500">Alamat: {item.address}</p>
                       </div>
 
@@ -1394,7 +1401,7 @@ export default function AdminDashboard() {
                         <a href={item.transfer_receipt_url} target="_blank" className="text-emerald-600 font-bold hover:underline flex items-center gap-1">
                           <Icon name="receipt" className="text-[16px]" /> Struk Transfer
                         </a>
-                        {!item.is_verified && (
+                        {!item.is_approved && !item.is_verified && (
                           <button
                             onClick={() => handleVerifyStudent(item)}
                             disabled={actionLoading === item.id}
@@ -1417,7 +1424,7 @@ export default function AdminDashboard() {
               <div className="bg-white dark:bg-[#181b25] p-6 rounded-3xl border border-slate-200 dark:border-[#31353f] shadow-xs space-y-4">
                 <div>
                   <h2 className="font-bold text-base">Validasi Kredensial Calon Tutor</h2>
-                  <p className="text-xs text-slate-400 mt-0.5">Audit legalitas dan izinkan pengajar mengambil jadwal les murid</p>
+                  <p className="text-xs text-slate-400 mt-0.5">Audit legalitas dan izinkan pengajar mengambil jadwal les murid di bursa tugas</p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
@@ -1606,7 +1613,7 @@ export default function AdminDashboard() {
                         <p className="text-slate-400 mt-1">Tutor: {sch.claimed_by_tutor_name || 'Belum Terikat'}</p>
                         <button
                           onClick={(e) => { e.stopPropagation(); handleSendReminder(sch); }}
-                          className="mt-2 text-[10px] text-emerald-600 font-bold hover:underline flex items-center gap-1"
+                          className="mt-2 text-[10px] text-emerald-600 font-bold hover:underline flex items-center gap-1 cursor-pointer"
                         >
                           <Icon name="chat" className="text-[14px]" /> Kirim Pengingat WA
                         </button>
@@ -1634,7 +1641,7 @@ export default function AdminDashboard() {
             )}
 
             {/* ========================================================================= */}
-            {/* 11. TAB: MANAJEMEN AKUN (DENGAN LOGIKA CASCADE HAPUS AMAN) */}
+            {/* 11. TAB: MANAJEMEN AKUN */}
             {/* ========================================================================= */}
             {activeTab === 'users' && (
               <div className="bg-white dark:bg-[#181b25] p-6 rounded-3xl border border-slate-200 dark:border-[#31353f] shadow-xs space-y-6">
