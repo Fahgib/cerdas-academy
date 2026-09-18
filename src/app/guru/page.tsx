@@ -227,7 +227,10 @@ export default function GuruDashboard() {
       setSchedules(schData);
       const timersObj: { [key: string]: number } = {};
       schData.forEach((s) => {
-        const isMyStudent = (s.claimed_by_tutor_name === tutorName || s.substitute_tutor_name === tutorName) && !s.is_substitute_needed;
+        const isMyStudent = 
+          (s.claimed_by_tutor_name?.toLowerCase() === tutorName?.toLowerCase() || 
+           s.substitute_tutor_name?.toLowerCase() === tutorName?.toLowerCase()) && 
+          !s.is_substitute_needed;
         if (isMyStudent && s.is_timer_active && s.session_started_at) {
           const elapsedSec = Math.floor((Date.now() - new Date(s.session_started_at).getTime()) / 1000);
           timersObj[s.id] = Math.max(0, 90 * 60 - elapsedSec);
@@ -375,7 +378,7 @@ export default function GuruDashboard() {
     }
   };
 
-  // 2. Mengambil Jadwal Mandiri yang Dibuat Murid dari Bursa
+  // Mengambil Jadwal dari Bursa
   const handleClaimSchedule = async (sch: any) => {
     if (!tutorProfile?.is_approved) {
       return alert('Akun Anda belum di-ACC oleh Kepala Sekolah.');
@@ -735,8 +738,10 @@ export default function GuruDashboard() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // 1. Murid yang khusus dibimbing oleh guru ini (Login saat ini)
   const myAssignedSchedules = schedules.filter(
-    (s) => (s.claimed_by_tutor_name === tutorProfile?.full_name || s.substitute_tutor_name === tutorProfile?.full_name) 
+    (s) => (s.claimed_by_tutor_name?.toLowerCase() === tutorProfile?.full_name?.toLowerCase() || 
+            s.substitute_tutor_name?.toLowerCase() === tutorProfile?.full_name?.toLowerCase()) 
            && s.status === 'claimed'
            && !s.is_substitute_needed
   );
@@ -745,8 +750,18 @@ export default function GuruDashboard() {
     (s) => s.is_substitute_needed && s.claimed_by_tutor_name !== tutorProfile?.full_name
   );
 
-  // Bursa jadwal baru yang dibuat oleh murid
-  const openVacancies = schedules.filter((s) => s.status === 'open' || !s.claimed_by_tutor_name);
+  // 2. Bursa Jadwal Terbuka (HANYA yang belum diambil oleh siapa pun)
+  const openVacancies = schedules.filter(
+    (s) => (s.status === 'open' || !s.claimed_by_tutor_name) && !s.is_substitute_needed
+  );
+
+  // 3. Jadwal yang SUDAH DIAMBIL oleh guru lain (Untuk notifikasi/informasi)
+  const takenByOthers = schedules.filter(
+    (s) => s.claimed_by_tutor_name && 
+           s.claimed_by_tutor_name?.toLowerCase() !== tutorProfile?.full_name?.toLowerCase() &&
+           s.status === 'claimed'
+  );
+
   const totalCompletedSessions = myAssignedSchedules.reduce((sum, sch) => sum + (sch.completed_sessions || 0), 0);
   const totalEarnedHonor = totalCompletedSessions * 30000;
 
@@ -1265,7 +1280,7 @@ export default function GuruDashboard() {
                         </div>
                       </div>
 
-                      {/* BURSA JADWAL MURID BARU (SINKRONISASI DARI PEMBUATAN JADWAL MURID) */}
+                      {/* BURSA JADWAL MURID & STATUS ALOKASI MURID */}
                       <div className="lg:col-span-3 space-y-6">
                         <div className="p-6 rounded-2xl bg-white dark:bg-[#181b25] border border-slate-200 dark:border-[#31353f] shadow-xs space-y-4">
                           <div className="flex justify-between items-center text-xs">
@@ -1274,29 +1289,52 @@ export default function GuruDashboard() {
                           </div>
 
                           <div className="space-y-3 text-xs">
-                            {openVacancies.length === 0 ? (
+                            {/* Jika tidak ada jadwal sama sekali */}
+                            {openVacancies.length === 0 && takenByOthers.length === 0 ? (
                               <div className="p-4 rounded-xl bg-slate-50 dark:bg-[#1c1f29] text-center text-slate-400">
-                                Belum ada slot jadwal murid yang terbuka.
+                                Belum ada jadwal murid yang terdaftar.
                               </div>
                             ) : (
-                              openVacancies.map((v) => (
-                                <div key={v.id} className="p-4 rounded-xl bg-slate-50 dark:bg-[#1c1f29] space-y-2 border border-slate-100 dark:border-transparent">
-                                  <div className="flex justify-between items-start font-bold">
-                                    <span className="text-slate-900 dark:text-white">{v.student_name}</span>
-                                    <span className="text-emerald-600 font-extrabold">Rp 30k/sesi</span>
+                              <>
+                                {/* DAFTAR 1: Jadwal yang Masih Terbuka (Bisa Diambil) */}
+                                {openVacancies.map((v) => (
+                                  <div key={v.id} className="p-4 rounded-xl bg-slate-50 dark:bg-[#1c1f29] space-y-2 border border-emerald-500/20">
+                                    <div className="flex justify-between items-start font-bold">
+                                      <span className="text-slate-900 dark:text-white">{v.student_name}</span>
+                                      <span className="text-emerald-600 font-extrabold">Rp 30k/sesi</span>
+                                    </div>
+                                    <p className="text-slate-600 dark:text-slate-300 font-semibold">{v.today_topic || 'Bimbingan Belajar'}</p>
+                                    <p className="text-slate-400">{v.day_of_week} • {v.session_time?.substring(0, 5)} WIB</p>
+                                    <p className="text-[11px] text-slate-400 truncate">{v.student_address}</p>
+                                    <button
+                                      onClick={() => handleClaimSchedule(v)}
+                                      disabled={claimLoading === v.id || !tutorProfile?.is_approved}
+                                      className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow-xs cursor-pointer disabled:opacity-50 transition-all"
+                                    >
+                                      {claimLoading === v.id ? 'Memproses...' : 'Ambil Jadwal Ini'}
+                                    </button>
                                   </div>
-                                  <p className="text-slate-600 dark:text-slate-300 font-semibold">{v.today_topic || 'Bimbingan Belajar'}</p>
-                                  <p className="text-slate-400">{v.day_of_week} • {v.session_time?.substring(0, 5)} WIB</p>
-                                  <p className="text-[11px] text-slate-400 truncate">{v.student_address}</p>
-                                  <button
-                                    onClick={() => handleClaimSchedule(v)}
-                                    disabled={claimLoading === v.id || !tutorProfile?.is_approved}
-                                    className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow-xs cursor-pointer disabled:opacity-50 transition-all"
-                                  >
-                                    {claimLoading === v.id ? 'Memproses...' : 'Ambil Jadwal Mengajar Ini'}
-                                  </button>
-                                </div>
-                              ))
+                                ))}
+
+                                {/* DAFTAR 2: Notifikasi Murid yang SUDAH DIAMBIL oleh Guru Lain */}
+                                {takenByOthers.map((t) => (
+                                  <div key={t.id} className="p-4 rounded-xl bg-slate-100/70 dark:bg-[#141720] space-y-2 border border-slate-200 dark:border-[#2a2e39] opacity-80">
+                                    <div className="flex justify-between items-start font-bold">
+                                      <span className="text-slate-700 dark:text-slate-300">{t.student_name}</span>
+                                      <span className="px-2 py-0.5 rounded bg-slate-200 dark:bg-[#262a34] text-slate-600 dark:text-slate-400 text-[10px]">
+                                        Terisi
+                                      </span>
+                                    </div>
+                                    <p className="text-slate-500 text-[11px]">{t.day_of_week} • {t.session_time?.substring(0, 5)} WIB</p>
+                                    
+                                    {/* Box Notifikasi Penugasan */}
+                                    <div className="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-900/40 text-[11px] text-amber-800 dark:text-amber-300 font-semibold flex items-center gap-1.5">
+                                      <Icon name="lock" className="text-[16px] text-amber-600 shrink-0" />
+                                      <span>Sudah diambil oleh <b>Kak {t.claimed_by_tutor_name}</b></span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </>
                             )}
                           </div>
                         </div>
