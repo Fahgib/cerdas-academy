@@ -267,26 +267,32 @@ export default function MuridDashboard() {
     if (helpData) setHomeworkHelpList(helpData);
   };
 
-  // Mengambil daftar tutor yang sudah resmi di-ACC Kepala Sekolah
+  // Mengambil seluruh daftar guru yang terdaftar tanpa filter ketat
   const fetchTutorsForSelection = async () => {
-    const { data } = await supabase
-      .from('tutor_applications')
-      .select('*')
-      .eq('is_approved', true);
-    if (data) setAvailableTutors(data);
+    try {
+      const { data, error } = await supabase
+        .from('tutor_applications')
+        .select('*')
+        .order('full_name', { ascending: true });
+
+      if (data && !error) {
+        setAvailableTutors(data);
+      }
+    } catch (err) {
+      console.error('Gagal mengambil daftar guru:', err);
+    }
   };
 
-  // 2. Pembuatan Jadwal Baru Mandiri oleh Siswa (Dengan Fix month_period & student_grade)
+  // 2. Pembuatan Jadwal Baru Mandiri oleh Siswa (Dengan Proteksi Anti-Duplikasi)
   const handleSaveNewSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!studentProfile) return;
 
     setSavingNewSchedule(true);
     try {
-      const tutorAssigned = selectedTutorChoice || null;
+      const tutorAssigned = selectedTutorChoice.trim() !== '' ? selectedTutorChoice.trim() : null;
       const scheduleStatus = tutorAssigned ? 'claimed' : 'open';
 
-      // Mengisi month_period dengan tanggal awal bulan berjalan (contoh: 2026-09-01)
       const now = new Date();
       const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
 
@@ -305,20 +311,30 @@ export default function MuridDashboard() {
         is_substitute_needed: false
       };
 
-      // Coba masukkan dengan kolom student_grade
-      let { error: schErr } = await supabase
-        .from('schedules')
-        .insert([{ ...payload, student_grade: studentProfile.grade || 'SMP' }]);
-
-      // Fallback jika skema database menolak student_grade akibat cache skema
-      if (schErr && schErr.message.includes('student_grade')) {
-        const retryResult = await supabase
+      // CEGAH DUPLIKASI: Jika murid sudah punya jadwal aktif, perbarui (UPDATE)
+      if (schedules.length > 0) {
+        const { error: updErr } = await supabase
           .from('schedules')
-          .insert([payload]);
-        schErr = retryResult.error;
-      }
+          .update(payload)
+          .eq('id', schedules[0].id);
 
-      if (schErr) throw schErr;
+        if (updErr) throw updErr;
+      } else {
+        // Buat satu baris baru jika belum punya
+        let { error: schErr } = await supabase
+          .from('schedules')
+          .insert([{ ...payload, student_grade: studentProfile.grade || 'SMP' }]);
+
+        // Fallback jika skema database menolak student_grade akibat cache skema
+        if (schErr && schErr.message.includes('student_grade')) {
+          const retryResult = await supabase
+            .from('schedules')
+            .insert([payload]);
+          schErr = retryResult.error;
+        }
+
+        if (schErr) throw schErr;
+      }
 
       await supabase
         .from('registrations')
@@ -326,11 +342,17 @@ export default function MuridDashboard() {
         .eq('id', studentProfile.id);
 
       confetti({ particleCount: 90, spread: 70 });
-      alert('Horeee! 🎉 Jadwal belajar Anda berhasil dibuat dan tersinkronisasi ke sistem Guru & Kepala Sekolah!');
+      alert(
+        tutorAssigned 
+          ? `Horeee! 🎉 Jadwal berhasil disimpan! Mentor kamu adalah Kak ${tutorAssigned}.` 
+          : 'Horeee! 🎉 Jadwal berhasil disimpan dan masuk ke bursa pengajar!'
+      );
+
       setShowCreateScheduleModal(false);
+      setSelectedTutorChoice('');
       fetchDashboardData(studentProfile.phone_number, studentProfile.student_name);
     } catch (err: any) {
-      alert('Gagal membuat jadwal: ' + err.message);
+      alert('Gagal mengatur jadwal: ' + err.message);
     } finally {
       setSavingNewSchedule(false);
     }
@@ -1031,7 +1053,7 @@ export default function MuridDashboard() {
                                 }}
                                 className="py-2.5 px-4 rounded-xl bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-[#4edea3] text-xs font-bold hover:bg-emerald-100 transition-colors cursor-pointer flex items-center gap-1.5"
                               >
-                                <Icon name="add" className="text-[18px]" /> Tambah Jadwal Baru
+                                <Icon name="edit" className="text-[18px]" /> Ubah Hari & Mentor Belajar
                               </button>
                             </div>
                           </div>
@@ -1291,8 +1313,8 @@ export default function MuridDashboard() {
                           }}
                           className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
                         >
-                          <Icon name="add" className="text-[18px]" />
-                          <span>Buat Jadwal Baru</span>
+                          <Icon name="edit" className="text-[18px]" />
+                          <span>{schedules.length > 0 ? 'Ubah Jadwal' : 'Buat Jadwal Baru'}</span>
                         </button>
                       </div>
                     </div>
