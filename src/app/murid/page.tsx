@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase';
 import confetti from 'canvas-confetti';
 import imageCompression from 'browser-image-compression';
 
-// Helper pemanggil Google Material Symbols Stitch
+// Helper pemanggil Google Material Symbols
 const Icon = ({ name, fill = false, className = '' }: { name: string; fill?: boolean; className?: string }) => (
   <span 
     className={`material-symbols-outlined select-none inline-flex items-center justify-center leading-none ${className}`}
@@ -148,7 +148,7 @@ export default function MuridDashboard() {
     }
   };
 
-  // 1. Validasi Login dengan Gembok Persetujuan Kepala Sekolah
+  // 1. Validasi Login dengan Kunci Verifikasi Kepala Sekolah
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!studentPhone.trim() || !studentPassword.trim()) {
@@ -276,7 +276,7 @@ export default function MuridDashboard() {
     if (data) setAvailableTutors(data);
   };
 
-  // 2. Pembuatan Jadwal Baru Mandiri oleh Siswa
+  // 2. Pembuatan Jadwal Baru Mandiri oleh Siswa (Dengan Fix month_period & student_grade)
   const handleSaveNewSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!studentProfile) return;
@@ -286,24 +286,37 @@ export default function MuridDashboard() {
       const tutorAssigned = selectedTutorChoice || null;
       const scheduleStatus = tutorAssigned ? 'claimed' : 'open';
 
-      const { error: schErr } = await supabase
+      // Mengisi month_period dengan tanggal awal bulan berjalan (contoh: 2026-09-01)
+      const now = new Date();
+      const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+
+      const payload: Record<string, any> = {
+        student_name: studentProfile.student_name,
+        student_phone: studentProfile.phone_number,
+        student_address: studentProfile.address || 'Alamat Siswa',
+        day_of_week: newScheduleDay,
+        session_time: `${newScheduleTime}:00`,
+        today_topic: newScheduleTopic,
+        month_period: firstDayOfMonth, // Nilai wajib untuk mencegah error NOT NULL
+        target_sessions: 8,
+        completed_sessions: 0,
+        status: scheduleStatus,
+        claimed_by_tutor_name: tutorAssigned,
+        is_substitute_needed: false
+      };
+
+      // Coba masukkan dengan kolom student_grade
+      let { error: schErr } = await supabase
         .from('schedules')
-        .insert([
-          {
-            student_name: studentProfile.student_name,
-            student_phone: studentProfile.phone_number,
-            student_address: studentProfile.address || 'Alamat Siswa',
-            student_grade: studentProfile.grade || 'SMP',
-            day_of_week: newScheduleDay,
-            session_time: `${newScheduleTime}:00`,
-            today_topic: newScheduleTopic,
-            target_sessions: 8,
-            completed_sessions: 0,
-            status: scheduleStatus,               // 'open' masuk ke bursa guru, 'claimed' jika langsung pilih guru
-            claimed_by_tutor_name: tutorAssigned, // Nama guru pilihan siswa
-            is_substitute_needed: false
-          }
-        ]);
+        .insert([{ ...payload, student_grade: studentProfile.grade || 'SMP' }]);
+
+      // Fallback jika skema database menolak student_grade akibat cache skema
+      if (schErr && schErr.message.includes('student_grade')) {
+        const retryResult = await supabase
+          .from('schedules')
+          .insert([payload]);
+        schErr = retryResult.error;
+      }
 
       if (schErr) throw schErr;
 
