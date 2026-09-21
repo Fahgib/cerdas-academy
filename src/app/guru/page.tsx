@@ -17,6 +17,15 @@ const Icon = ({ name, fill = false, className = '' }: { name: string; fill?: boo
 
 const DAYS_NAME = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
 
+// Pilihan Avatar Animasi Bawaan
+const AVATAR_PRESETS = [
+  { id: '1', name: 'Kucing Jenius', url: 'https://api.dicebear.com/7.x/bottts/svg?seed=Felix&backgroundColor=b6e3f4' },
+  { id: '2', name: 'Rubah Cerdas', url: 'https://api.dicebear.com/7.x/bottts/svg?seed=Milo&backgroundColor=ffdfbf' },
+  { id: '3', name: 'Panda Bijak', url: 'https://api.dicebear.com/7.x/bottts/svg?seed=Panda&backgroundColor=c0aede' },
+  { id: '4', name: 'Burung Hantu Sains', url: 'https://api.dicebear.com/7.x/bottts/svg?seed=Oliver&backgroundColor=d1d4f9' },
+  { id: '5', name: 'Astronot Ceria', url: 'https://api.dicebear.com/7.x/bottts/svg?seed=Luna&backgroundColor=ffd5dc' },
+];
+
 export default function GuruDashboard() {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [activeTab, setActiveTab] = useState<'beranda' | 'jadwal' | 'siswa-kbm' | 'tanya-pr' | 'profil'>('beranda');
@@ -51,6 +60,17 @@ export default function GuruDashboard() {
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [savingPassword, setSavingPassword] = useState(false);
   const [passwordError, setPasswordError] = useState('');
+
+  // State Edit Profil Publik Mentor
+  const [showEditProfileModal, setShowEditProfileModal] = useState(false);
+  const [editFullName, setEditFullName] = useState('');
+  const [editCampus, setEditCampus] = useState('');
+  const [editMajor, setEditMajor] = useState('');
+  const [editAchievements, setEditAchievements] = useState('');
+  const [editAvatarOptionType, setEditAvatarOptionType] = useState<'preset' | 'upload'>('preset');
+  const [editAvatarPreset, setEditAvatarPreset] = useState(AVATAR_PRESETS[0].url);
+  const [editAvatarFile, setEditAvatarFile] = useState<File | null>(null);
+  const [savingProfile, setSavingProfile] = useState(false);
 
   // Stopwatch Live KBM
   const [activeTimers, setActiveTimers] = useState<{ [scheduleId: string]: number }>({});
@@ -146,11 +166,22 @@ export default function GuruDashboard() {
 
       if (!error && data && data.is_approved) {
         setTutorProfile(data);
+        syncEditFormValues(data);
         setIsLoggedIn(true);
         fetchTutorData(data.full_name);
       }
     } catch (err) {
       console.error('Auto login guru gagal:', err);
+    }
+  };
+
+  const syncEditFormValues = (profile: any) => {
+    setEditFullName(profile?.full_name || '');
+    setEditCampus(profile?.campus || '');
+    setEditMajor(profile?.major || '');
+    setEditAchievements(profile?.achievements || '');
+    if (profile?.avatar_url) {
+      setEditAvatarPreset(profile.avatar_url);
     }
   };
 
@@ -192,7 +223,6 @@ export default function GuruDashboard() {
         return;
       }
 
-      // KUNCI VERIFIKASI ACC DARI KEPALA SEKOLAH
       if (!tutorData.is_approved) {
         setAuthError('Pendaftaran akun guru Anda masih dalam peninjauan oleh Kepala Sekolah. Silakan tunggu konfirmasi aktivasi via WhatsApp.');
         setLoading(false);
@@ -207,6 +237,7 @@ export default function GuruDashboard() {
       }
 
       setTutorProfile(tutorData);
+      syncEditFormValues(tutorData);
       localStorage.setItem('cerdas_tutor_phone', tutorPhone.trim());
       setIsLoggedIn(true);
       fetchTutorData(tutorData.full_name);
@@ -285,6 +316,56 @@ export default function GuruDashboard() {
     setQuizzes([]);
     setEvaluations([]);
     setHomeworkHelpList([]);
+  };
+
+  // Simpan Pembaruan Profil Guru (Akan langsung tayang di Dashboard Utama)
+  const handleSaveProfileUpdates = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!tutorProfile) return;
+
+    setSavingProfile(true);
+    try {
+      let finalAvatar = editAvatarPreset;
+
+      if (editAvatarOptionType === 'upload' && editAvatarFile) {
+        const options = { maxSizeMB: 0.3, maxWidthOrHeight: 800, useWebWorker: true };
+        const compressed = await imageCompression(editAvatarFile, options);
+        const ext = editAvatarFile.name.split('.').pop();
+        const path = `tutors/avatars/${Date.now()}-${Math.random().toString(36).substring(2)}.${ext}`;
+
+        const { error: uploadErr } = await supabase.storage.from('transfer-receipts').upload(path, compressed);
+        if (uploadErr) throw uploadErr;
+
+        const { data: urlData } = supabase.storage.from('transfer-receipts').getPublicUrl(path);
+        finalAvatar = urlData.publicUrl;
+      }
+
+      const updatePayload = {
+        full_name: editFullName.trim(),
+        campus: editCampus.trim(),
+        major: editMajor.trim(),
+        achievements: editAchievements.trim(),
+        avatar_url: finalAvatar
+      };
+
+      const { data, error } = await supabase
+        .from('tutor_applications')
+        .update(updatePayload)
+        .eq('id', tutorProfile.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setTutorProfile(data);
+      confetti({ particleCount: 80, spread: 60 });
+      alert('Profil berhasil diperbarui! Perubahan Anda kini langsung tayang di etalase beranda utama.');
+      setShowEditProfileModal(false);
+    } catch (err: any) {
+      alert('Gagal memperbarui profil: ' + err.message);
+    } finally {
+      setSavingProfile(false);
+    }
   };
 
   const handleChangePassword = async (e: React.FormEvent) => {
@@ -378,7 +459,6 @@ export default function GuruDashboard() {
     }
   };
 
-  // Mengambil Jadwal dari Bursa
   const handleClaimSchedule = async (sch: any) => {
     if (!tutorProfile?.is_approved) {
       return alert('Akun Anda belum di-ACC oleh Kepala Sekolah.');
@@ -773,6 +853,8 @@ export default function GuruDashboard() {
     return (sch.student_grade || '').toLowerCase().includes(studentJenjangFilter.toLowerCase());
   });
 
+  const tutorAvatarDisplay = tutorProfile?.avatar_url || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(tutorProfile?.full_name || 'Tutor')}&backgroundColor=b6e3f4`;
+
   return (
     <div className={isDarkMode ? 'dark' : ''}>
       <div className="bg-[#f8fafc] text-[#0f172a] dark:bg-[#0a0e17] dark:text-[#dfe2ef] font-['Plus_Jakarta_Sans',sans-serif] min-h-screen flex flex-col antialiased transition-colors duration-200">
@@ -796,9 +878,11 @@ export default function GuruDashboard() {
             <div className="px-4 py-3">
               <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#1c1f29] border border-slate-200/70 dark:border-transparent flex items-center gap-3">
                 <div className="relative flex-shrink-0">
-                  <div className="w-10 h-10 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shadow-sm">
-                    <Icon name="person" className="text-[20px]" />
-                  </div>
+                  <img
+                    src={tutorAvatarDisplay}
+                    alt={tutorProfile?.full_name || 'Tutor'}
+                    className="w-11 h-11 rounded-full object-cover border-2 border-emerald-500 bg-white"
+                  />
                   <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-[#1c1f29]"></span>
                 </div>
                 <div className="flex flex-col min-w-0 flex-1">
@@ -806,7 +890,7 @@ export default function GuruDashboard() {
                     <span className="text-xs font-bold text-slate-800 dark:text-white truncate">{tutorProfile?.full_name || 'Tutor Cerdas'}</span>
                     <Icon name="verified" className="text-emerald-600 dark:text-[#4edea3] text-[14px]" />
                   </div>
-                  <span className="text-[11px] text-slate-500 dark:text-[#bbcabf] truncate">Tutor Utama MIPA • Siaga</span>
+                  <span className="text-[11px] text-slate-500 dark:text-[#bbcabf] truncate">{tutorProfile?.campus || 'Tutor Utama MIPA'}</span>
                 </div>
               </div>
             </div>
@@ -930,9 +1014,11 @@ export default function GuruDashboard() {
               onClick={() => setActiveTab('profil')}
               className="flex items-center gap-2 pl-1 cursor-pointer"
             >
-              <div className="w-8 h-8 rounded-full bg-emerald-600 dark:bg-[#4edea3] text-white dark:text-[#003824] flex items-center justify-center font-bold text-xs shadow-sm">
-                <Icon name="person" className="text-[18px]" />
-              </div>
+              <img
+                src={tutorAvatarDisplay}
+                alt="Avatar"
+                className="w-8 h-8 rounded-full object-cover border border-emerald-500 bg-white shadow-sm"
+              />
             </div>
           </div>
         </header>
@@ -1008,9 +1094,11 @@ export default function GuruDashboard() {
                   <div className="space-y-6">
                     <div className="p-6 rounded-2xl bg-white dark:bg-[#181b25] border border-slate-200 dark:border-[#31353f] shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                       <div className="flex items-center gap-4">
-                        <div className="w-14 h-14 rounded-2xl bg-emerald-50 dark:bg-[#4edea3]/20 border border-emerald-100 dark:border-transparent flex items-center justify-center text-emerald-600 dark:text-[#4edea3] shrink-0 shadow-xs">
-                          <Icon name="workspace_premium" className="text-[32px]" />
-                        </div>
+                        <img
+                          src={tutorAvatarDisplay}
+                          alt={tutorProfile?.full_name}
+                          className="w-16 h-16 rounded-2xl object-cover border-2 border-emerald-500 bg-white shrink-0 shadow-xs"
+                        />
                         <div>
                           <div className="flex items-center gap-2 flex-wrap">
                             <h1 className="text-xl font-bold tracking-tight">Selamat Mengajar, {tutorProfile?.full_name} 👋</h1>
@@ -1025,6 +1113,14 @@ export default function GuruDashboard() {
                       </div>
 
                       <div className="flex items-center gap-2">
+                        {/* TOMBOL EDIT PROFIL PUBLIK GURU */}
+                        <button
+                          onClick={() => setShowEditProfileModal(true)}
+                          className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                        >
+                          <Icon name="edit" className="text-[18px]" />
+                          <span>Edit Profil Publik</span>
+                        </button>
                         <button
                           onClick={() => setShowProfileModal(true)}
                           className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-[#262a34] text-xs font-bold flex items-center gap-1.5 hover:bg-slate-200 transition-all cursor-pointer"
@@ -1144,7 +1240,6 @@ export default function GuruDashboard() {
                                   <p className="text-xs text-slate-500 mt-0.5">{sch.student_address}</p>
                                 </div>
 
-                                {/* TOMBOL MASUK KELAS ONLINE JITSI MEET */}
                                 <button
                                   onClick={() => setOnlineClassSchedule(sch)}
                                   className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-sm flex items-center justify-center gap-2 transition-all cursor-pointer"
@@ -1289,14 +1384,12 @@ export default function GuruDashboard() {
                           </div>
 
                           <div className="space-y-3 text-xs">
-                            {/* Jika tidak ada jadwal sama sekali */}
                             {openVacancies.length === 0 && takenByOthers.length === 0 ? (
                               <div className="p-4 rounded-xl bg-slate-50 dark:bg-[#1c1f29] text-center text-slate-400">
                                 Belum ada jadwal murid yang terdaftar.
                               </div>
                             ) : (
                               <>
-                                {/* DAFTAR 1: Jadwal yang Masih Terbuka (Bisa Diambil) */}
                                 {openVacancies.map((v) => (
                                   <div key={v.id} className="p-4 rounded-xl bg-slate-50 dark:bg-[#1c1f29] space-y-2 border border-emerald-500/20">
                                     <div className="flex justify-between items-start font-bold">
@@ -1316,7 +1409,6 @@ export default function GuruDashboard() {
                                   </div>
                                 ))}
 
-                                {/* DAFTAR 2: Notifikasi Murid yang SUDAH DIAMBIL oleh Guru Lain */}
                                 {takenByOthers.map((t) => (
                                   <div key={t.id} className="p-4 rounded-xl bg-slate-100/70 dark:bg-[#141720] space-y-2 border border-slate-200 dark:border-[#2a2e39] opacity-80">
                                     <div className="flex justify-between items-start font-bold">
@@ -1327,7 +1419,6 @@ export default function GuruDashboard() {
                                     </div>
                                     <p className="text-slate-500 text-[11px]">{t.day_of_week} • {t.session_time?.substring(0, 5)} WIB</p>
                                     
-                                    {/* Box Notifikasi Penugasan */}
                                     <div className="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-900/40 text-[11px] text-amber-800 dark:text-amber-300 font-semibold flex items-center gap-1.5">
                                       <Icon name="lock" className="text-[16px] text-amber-600 shrink-0" />
                                       <span>Sudah diambil oleh <b>Kak {t.claimed_by_tutor_name}</b></span>
@@ -1371,50 +1462,58 @@ export default function GuruDashboard() {
                     </div>
 
                     <div className="space-y-3">
-                      {myAssignedSchedules.map((sch) => (
-                        <div key={sch.id} className="p-5 rounded-2xl bg-white dark:bg-[#181b25] border border-slate-200 dark:border-[#31353f] shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-bold text-amber-600">{sch.day_of_week} • {sch.session_time?.substring(0, 5)} WIB</span>
-                              <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 text-[10px] font-bold">
-                                {sch.completed_sessions || 0} / {sch.target_sessions || 8} Sesi
-                              </span>
+                      {myAssignedSchedules
+                        .filter((sch) => !activeCalendarDay || sch.day_of_week === activeCalendarDay)
+                        .map((sch) => (
+                          <div key={sch.id} className="p-5 rounded-2xl bg-white dark:bg-[#181b25] border border-slate-200 dark:border-[#31353f] shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold text-amber-600">{sch.day_of_week} • {sch.session_time?.substring(0, 5)} WIB</span>
+                                <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 text-[10px] font-bold">
+                                  {sch.completed_sessions || 0} / {sch.target_sessions || 8} Sesi
+                                </span>
+                              </div>
+                              <h4 className="text-base font-bold mt-1">{sch.student_name}</h4>
+                              <p className="text-xs text-slate-500">{sch.today_topic || 'Bimbingan Belajar'} • {sch.student_address}</p>
                             </div>
-                            <h4 className="text-base font-bold mt-1">{sch.student_name}</h4>
-                            <p className="text-xs text-slate-500">{sch.today_topic || 'Bimbingan Belajar'} • {sch.student_address}</p>
-                          </div>
 
-                          <div className="flex gap-2 flex-wrap">
-                            <button
-                              onClick={() => setOnlineClassSchedule(sch)}
-                              className="px-3.5 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold flex items-center gap-1 hover:bg-emerald-700 cursor-pointer"
-                            >
-                              <Icon name="video_camera_front" className="text-[16px]" /> Kelas Online
-                            </button>
-                            <button
-                              onClick={() => {
-                                setActiveReportSchedule(sch);
-                                setReportTopic(sch.today_topic || '');
-                              }}
-                              className="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-[#262a34] text-xs font-bold hover:bg-slate-200 cursor-pointer"
-                            >
-                              Input Rapor
-                            </button>
-                            <button
-                              onClick={() => openChat(sch)}
-                              className="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-[#262a34] text-xs font-bold flex items-center gap-1 hover:bg-slate-200 cursor-pointer"
-                            >
-                              <Icon name="chat" className="text-[16px]" /> Chat
-                            </button>
-                            <button
-                              onClick={() => handleRequestSubstitute(sch)}
-                              className="px-3.5 py-2 rounded-xl bg-rose-50 text-rose-600 text-xs font-bold hover:bg-rose-100 cursor-pointer"
-                            >
-                              Izin Ganti
-                            </button>
+                            <div className="flex gap-2 flex-wrap">
+                              <button
+                                onClick={() => setOnlineClassSchedule(sch)}
+                                className="px-3.5 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold flex items-center gap-1 hover:bg-emerald-700 cursor-pointer"
+                              >
+                                <Icon name="video_camera_front" className="text-[16px]" /> Kelas Online
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setActiveReportSchedule(sch);
+                                  setReportTopic(sch.today_topic || '');
+                                }}
+                                className="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-[#262a34] text-xs font-bold hover:bg-slate-200 cursor-pointer"
+                              >
+                                Input Rapor
+                              </button>
+                              <button
+                                onClick={() => openChat(sch)}
+                                className="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-[#262a34] text-xs font-bold flex items-center gap-1 hover:bg-slate-200 cursor-pointer"
+                              >
+                                <Icon name="chat" className="text-[16px]" /> Chat
+                              </button>
+                              <button
+                                onClick={() => handleRequestSubstitute(sch)}
+                                className="px-3.5 py-2 rounded-xl bg-rose-50 text-rose-600 text-xs font-bold hover:bg-rose-100 cursor-pointer"
+                              >
+                                Izin Ganti
+                              </button>
+                            </div>
                           </div>
+                        ))}
+
+                      {myAssignedSchedules.filter((sch) => !activeCalendarDay || sch.day_of_week === activeCalendarDay).length === 0 && (
+                        <div className="p-8 text-center text-xs text-slate-400 bg-white dark:bg-[#181b25] rounded-2xl border border-slate-200 dark:border-[#31353f]">
+                          Tidak ada jadwal mengajar pada hari {activeCalendarDay}.
                         </div>
-                      ))}
+                      )}
                     </div>
                   </div>
                 )}
@@ -1560,15 +1659,24 @@ export default function GuruDashboard() {
                   <div className="max-w-2xl space-y-6">
                     <div className="p-6 rounded-2xl bg-white dark:bg-[#181b25] border border-slate-200 dark:border-[#31353f] shadow-xs space-y-4">
                       <div className="flex items-center gap-4">
-                        <div className="w-16 h-16 rounded-2xl bg-emerald-600 text-white flex items-center justify-center font-bold text-xl shadow-sm">
-                          <Icon name="person" className="text-[32px]" />
-                        </div>
-                        <div>
+                        <img
+                          src={tutorAvatarDisplay}
+                          alt={tutorProfile?.full_name}
+                          className="w-16 h-16 rounded-2xl object-cover border-2 border-emerald-500 bg-white shadow-sm"
+                        />
+                        <div className="min-w-0 flex-1">
                           <h2 className="text-lg font-bold">{tutorProfile?.full_name}</h2>
                           <span className="text-xs font-bold text-emerald-600">ID Pengajar: #TTR-20419</span>
                           <p className="text-xs text-slate-400 mt-0.5">{tutorProfile?.campus} • {tutorProfile?.major}</p>
                         </div>
                       </div>
+
+                      {tutorProfile?.achievements && (
+                        <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#1c1f29] border border-slate-100 dark:border-[#31353f]/40 text-xs">
+                          <span className="font-bold text-slate-500 uppercase text-[10px] block mb-1">Prestasi & Bio Anda di Beranda:</span>
+                          <p className="italic text-slate-700 dark:text-slate-300">"{tutorProfile.achievements}"</p>
+                        </div>
+                      )}
 
                       <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-[#31353f] text-xs">
                         <div className="flex justify-between p-3 rounded-xl bg-slate-50 dark:bg-[#1c1f29]">
@@ -1583,6 +1691,16 @@ export default function GuruDashboard() {
                     </div>
 
                     <div className="p-2 rounded-2xl bg-white dark:bg-[#181b25] border border-slate-200 dark:border-[#31353f] divide-y divide-slate-100 dark:divide-[#31353f] text-xs font-semibold">
+                      <button
+                        onClick={() => setShowEditProfileModal(true)}
+                        className="w-full p-3.5 flex justify-between items-center hover:bg-slate-50 dark:hover:bg-[#262a34] rounded-xl cursor-pointer text-emerald-700 dark:text-[#4edea3]"
+                      >
+                        <span className="flex items-center gap-2.5">
+                          <Icon name="badge" className="text-emerald-600" /> Edit Profil Publik & Karakter Avatar
+                        </span>
+                        <Icon name="chevron_right" className="text-slate-400" />
+                      </button>
+
                       <button
                         onClick={() => setShowProfileModal(true)}
                         className="w-full p-3.5 flex justify-between items-center hover:bg-slate-50 dark:hover:bg-[#262a34] rounded-xl cursor-pointer"
@@ -1646,6 +1764,131 @@ export default function GuruDashboard() {
             </div>
           </nav>
         )}
+
+        {/* MODAL EDIT PROFIL PUBLIK GURU */}
+        <AnimatePresence>
+          {showEditProfileModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+              <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-white dark:bg-[#181b25] border border-slate-200 dark:border-[#31353f] w-full max-w-md rounded-3xl p-6 shadow-2xl space-y-4 text-xs max-h-[90vh] overflow-y-auto">
+                <div className="flex justify-between items-center border-b border-slate-100 dark:border-[#31353f] pb-3">
+                  <h3 className="font-bold text-sm flex items-center gap-2">
+                    <Icon name="badge" className="text-emerald-600" /> Edit Profil Publik Mentor
+                  </h3>
+                  <button onClick={() => setShowEditProfileModal(false)} className="cursor-pointer"><Icon name="close" /></button>
+                </div>
+
+                <form onSubmit={handleSaveProfileUpdates} className="space-y-3.5">
+                  {/* Pilihan Avatar / Foto Profil */}
+                  <div className="p-3.5 bg-slate-50 dark:bg-[#1c1f29] rounded-2xl border border-slate-200/80 dark:border-transparent space-y-2.5">
+                    <div className="flex justify-between items-center">
+                      <label className="font-bold text-slate-800 dark:text-white">Tampilan Foto / Avatar</label>
+                      <div className="flex gap-1 p-0.5 bg-white dark:bg-[#262a34] rounded-lg border border-slate-200 dark:border-transparent text-[10px] font-bold">
+                        <button
+                          type="button"
+                          onClick={() => setEditAvatarOptionType('preset')}
+                          className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${editAvatarOptionType === 'preset' ? 'bg-emerald-600 text-white' : 'text-slate-500'}`}
+                        >
+                          Kartun
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditAvatarOptionType('upload')}
+                          className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${editAvatarOptionType === 'upload' ? 'bg-emerald-600 text-white' : 'text-slate-500'}`}
+                        >
+                          Foto Asli
+                        </button>
+                      </div>
+                    </div>
+
+                    {editAvatarOptionType === 'preset' ? (
+                      <div className="flex items-center gap-2.5 overflow-x-auto pb-1">
+                        {AVATAR_PRESETS.map((preset) => (
+                          <div
+                            key={preset.id}
+                            onClick={() => setEditAvatarPreset(preset.url)}
+                            className={`flex flex-col items-center gap-1 cursor-pointer p-1.5 rounded-xl border-2 transition-all bg-white dark:bg-[#262a34] shrink-0 ${
+                              editAvatarPreset === preset.url ? 'border-emerald-500 ring-2 ring-emerald-200 scale-105' : 'border-slate-200 dark:border-transparent opacity-70 hover:opacity-100'
+                            }`}
+                          >
+                            <img src={preset.url} alt={preset.name} className="w-10 h-10 rounded-lg" />
+                            <span className="text-[9px] font-bold text-slate-600 dark:text-slate-300">{preset.name.split(' ')[0]}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => setEditAvatarFile(e.target.files ? e.target.files[0] : null)}
+                          className="w-full text-slate-400 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:bg-emerald-500/20 file:text-emerald-600 font-bold"
+                        />
+                        <p className="text-[10px] text-slate-400 mt-1">*Pilih foto tersenyum ramah dan jelas.</p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block mb-1 font-semibold">Nama Lengkap & Gelar</label>
+                    <input
+                      type="text"
+                      required
+                      value={editFullName}
+                      onChange={(e) => setEditFullName(e.target.value)}
+                      placeholder="Contoh: Dimas Ramadhan, S.Pd."
+                      className="w-full p-2.5 rounded-xl border bg-slate-50 dark:bg-[#1c1f29] border-slate-200 dark:border-[#31353f] font-bold"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block mb-1 font-semibold">Asal Kampus</label>
+                      <input
+                        type="text"
+                        required
+                        value={editCampus}
+                        onChange={(e) => setEditCampus(e.target.value)}
+                        placeholder="Contoh: UI, ITB, UGM"
+                        className="w-full p-2.5 rounded-xl border bg-slate-50 dark:bg-[#1c1f29] border-slate-200 dark:border-[#31353f]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block mb-1 font-semibold">Jurusan / Prodi</label>
+                      <input
+                        type="text"
+                        required
+                        value={editMajor}
+                        onChange={(e) => setEditMajor(e.target.value)}
+                        placeholder="Contoh: Matematika"
+                        className="w-full p-2.5 rounded-xl border bg-slate-50 dark:bg-[#1c1f29] border-slate-200 dark:border-[#31353f]"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block mb-1 font-semibold">Daftar Prestasi & Bio Singkat</label>
+                    <textarea
+                      rows={3}
+                      required
+                      value={editAchievements}
+                      onChange={(e) => setEditAchievements(e.target.value)}
+                      placeholder="Tuliskan pengalaman mengajar atau prestasi lomba yang akan dibaca oleh calon murid & orang tua..."
+                      className="w-full p-2.5 rounded-xl border bg-slate-50 dark:bg-[#1c1f29] border-slate-200 dark:border-[#31353f] leading-relaxed"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={savingProfile}
+                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md cursor-pointer transition-all"
+                  >
+                    {savingProfile ? 'Menyimpan Pembaruan...' : 'Simpan Perubahan Profil'}
+                  </button>
+                </form>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
 
         {/* MODAL KELAS ONLINE JITSI MEET */}
         <AnimatePresence>
