@@ -1,67 +1,28 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { 
   Rocket, Star, Check, Users, Award, 
   GraduationCap, MapPin, KeyRound, Eye, EyeOff, 
   Lock, Phone, Copy, ShieldCheck, 
-  X, ArrowRight, Loader2, RotateCcw
+  X, ArrowRight, Loader2, RotateCcw, Image as ImageIcon, Sparkles
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import imageCompression from 'browser-image-compression';
 import { supabase } from '@/lib/supabase';
 
-// 1. Data Tutor Unggulan (Hanya untuk Etalase Profil/Inspirasi Murid)
-const TUTORS = [
-  {
-    id: '1',
-    name: 'Kak Sarah Nabilah, S.Si',
-    subject: 'Matematika Ceria, Logika & Calistung',
-    campus: 'Universitas Indonesia (UI)',
-    rating: '4.98',
-    sessions: 142,
-    badge: 'SUPER SABAR 💕',
-    avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&auto=format&fit=crop&q=80',
-    bio: 'Menjelaskan logika rumus dari akarnya lewat permainan edukatif tanpa hafalan buta, bikin matematika jadi pelajaran favorit si kecil.',
-  },
-  {
-    id: '2',
-    name: 'Kak Dimas Ramadhan',
-    subject: 'IPA, Sains Eksperimen & Fisika Dasar',
-    campus: 'Institut Teknologi Bandung (ITB)',
-    rating: '4.95',
-    sessions: 98,
-    badge: 'FAVORIT SAINS 🧪',
-    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80',
-    bio: 'Membawa alat peraga dan eksperimen seru ke rumah, melatih nalar kritis dan rasa ingin tahu anak terhadap sains.',
-  },
-  {
-    id: '3',
-    name: 'Kak Anindya Putri, M.Hum',
-    subject: 'English Phonics, Storytelling & Vocab',
-    campus: 'Universitas Gadjah Mada (UGM)',
-    rating: '5.00',
-    sessions: 186,
-    badge: 'FUN ENGLISH 🇬🇧',
-    avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=400&auto=format&fit=crop&q=80',
-    bio: 'Metode pengajaran interaktif dengan flashcards dan roleplay menyenangkan, melatih keberanian anak berbicara bahasa Inggris.',
-  },
-  {
-    id: '4',
-    name: 'Kak Farhan Al-Ghifari',
-    subject: 'Scratch Game Maker & Logika Robotik',
-    campus: 'Universitas Indonesia (UI)',
-    rating: '4.97',
-    sessions: 85,
-    badge: 'CREATIVE TECH 💻',
-    avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=400&auto=format&fit=crop&q=80',
-    bio: 'Mengasah kreativitas anak membuat game animasi sendiri dengan Scratch, melatih computational thinking sejak usia dini.',
-  },
+// Pilihan Avatar Animasi Bawaan (Jika guru tidak ingin mengunggah foto asli)
+const AVATAR_PRESETS = [
+  { id: '1', name: 'Kucing Jenius', url: 'https://api.dicebear.com/7.x/bottts/svg?seed=Felix&backgroundColor=b6e3f4' },
+  { id: '2', name: 'Rubah Cerdas', url: 'https://api.dicebear.com/7.x/bottts/svg?seed=Milo&backgroundColor=ffdfbf' },
+  { id: '3', name: 'Panda Bijak', url: 'https://api.dicebear.com/7.x/bottts/svg?seed=Panda&backgroundColor=c0aede' },
+  { id: '4', name: 'Burung Hantu Sains', url: 'https://api.dicebear.com/7.x/bottts/svg?seed=Oliver&backgroundColor=d1d4f9' },
+  { id: '5', name: 'Astronot Ceria', url: 'https://api.dicebear.com/7.x/bottts/svg?seed=Luna&backgroundColor=ffd5dc' },
 ];
 
-// 2. Data Paket Bimbingan Belajar
+// Data Paket Bimbingan Belajar
 const PACKAGES = [
   {
     daysPerWeek: 1,
@@ -144,8 +105,14 @@ export default function HomePage() {
   const [tutorCampus, setTutorCampus] = useState('');
   const [tutorMajor, setTutorMajor] = useState('');
   const [tutorAchievements, setTutorAchievements] = useState('');
+  const [tutorAvatarFile, setTutorAvatarFile] = useState<File | null>(null);
+  const [selectedAvatarPreset, setSelectedAvatarPreset] = useState<string>(AVATAR_PRESETS[0].url);
+  const [avatarOptionType, setAvatarOptionType] = useState<'upload' | 'preset'>('preset');
   const [certFile, setCertFile] = useState<File | null>(null);
   const [loadingTutor, setLoadingTutor] = useState(false);
+
+  // Daftar Guru Dinamis yang Terdaftar di Database
+  const [dynamicTutors, setDynamicTutors] = useState<any[]>([]);
 
   // Modal Login Terpadu (Murid, Guru, Kepsek)
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -160,6 +127,26 @@ export default function HomePage() {
   const [loginError, setLoginError] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
 
+  // Memuat Data Guru Terdaftar Langsung dari Supabase
+  useEffect(() => {
+    fetchRegisteredTutors();
+  }, []);
+
+  const fetchRegisteredTutors = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('tutor_applications')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (data && !error) {
+        setDynamicTutors(data);
+      }
+    } catch (err) {
+      console.error('Gagal memuat profil guru:', err);
+    }
+  };
+
   // Salin No Rekening BCA
   const handleCopyBCA = () => {
     navigator.clipboard.writeText('827190284410');
@@ -167,7 +154,7 @@ export default function HomePage() {
     setTimeout(() => setCopiedRek(false), 2500);
   };
 
-  // 1. Submit Registrasi Akun Murid (Tanpa Jadwal, Belum Di-ACC)
+  // 1. Submit Registrasi Akun Murid
   const handleCheckoutStudent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (loadingStudent) return;
@@ -184,7 +171,6 @@ export default function HomePage() {
 
     setLoadingStudent(true);
     try {
-      // Kompresi dan unggah struk transfer
       const options = { maxSizeMB: 0.4, maxWidthOrHeight: 1200, useWebWorker: true };
       const compressed = await imageCompression(receiptFile, options);
       const ext = receiptFile.name.split('.').pop();
@@ -195,7 +181,6 @@ export default function HomePage() {
 
       const { data: urlData } = supabase.storage.from('transfer-receipts').getPublicUrl(path);
 
-      // Simpan akun dengan status PENDING (Hari, Jam & Mentor diatur murid setelah di-ACC)
       const { error } = await supabase.from('registrations').insert([
         {
           student_name: studentName.trim(),
@@ -206,9 +191,9 @@ export default function HomePage() {
           selected_package: selectedPkg.title,
           grade: studentGrade,
           transfer_receipt_url: urlData.publicUrl,
-          is_approved: false,         // Kunci: Menunggu persetujuan
-          status: 'pending',           // Kunci: Status pendaftaran
-          has_scheduled: false         // Kunci: Belum mengatur jadwal
+          is_approved: false,
+          status: 'pending',
+          has_scheduled: false
         }
       ]);
 
@@ -221,7 +206,6 @@ export default function HomePage() {
         'Setelah disetujui, masuk ke Portal Murid untuk menentukan jadwal les dan memilih mentor idola.'
       );
 
-      // Reset Form
       setStudentName('');
       setParentPhone('');
       setStudentPassword('');
@@ -234,17 +218,34 @@ export default function HomePage() {
     }
   };
 
-  // 2. Submit Pendaftaran Mitra Guru
+  // 2. Submit Pendaftaran Mitra Guru (Dengan Pilihan Upload Foto / Avatar Animasi)
   const handleRegisterTutor = async (e: React.FormEvent) => {
     e.preventDefault();
     if (loadingTutor) return;
 
+    if (!tutorName.trim() || !tutorPhone.trim()) {
+      return alert('Lengkapi nama dan nomor WhatsApp guru!');
+    }
     if (!tutorPassword.trim() || tutorPassword.length < 6) {
       return alert('Kata sandi akun guru minimal 6 karakter!');
     }
 
     setLoadingTutor(true);
     try {
+      let finalAvatarUrl = selectedAvatarPreset;
+
+      // Jika guru memilih untuk mengunggah foto profil asli
+      if (avatarOptionType === 'upload' && tutorAvatarFile) {
+        const options = { maxSizeMB: 0.3, maxWidthOrHeight: 800, useWebWorker: true };
+        const compressedAvatar = await imageCompression(tutorAvatarFile, options);
+        const ext = tutorAvatarFile.name.split('.').pop();
+        const avatarPath = `tutors/avatars/${Date.now()}-${Math.random().toString(36).substring(2)}.${ext}`;
+        
+        await supabase.storage.from('transfer-receipts').upload(avatarPath, compressedAvatar);
+        const { data: avatarUrlData } = supabase.storage.from('transfer-receipts').getPublicUrl(avatarPath);
+        finalAvatarUrl = avatarUrlData.publicUrl;
+      }
+
       let certUrl = '';
       if (certFile) {
         const ext = certFile.name.split('.').pop();
@@ -262,8 +263,9 @@ export default function HomePage() {
           campus: tutorCampus.trim(),
           major: tutorMajor.trim(),
           achievements: tutorAchievements.trim(),
+          avatar_url: finalAvatarUrl, // Foto asli / Animasi Avatar
           certificate_url: certUrl || null,
-          is_approved: false,         // Kunci: Menunggu persetujuan
+          is_approved: false,
           status: 'pending'
         }
       ]);
@@ -271,14 +273,19 @@ export default function HomePage() {
       if (error) throw error;
 
       confetti({ particleCount: 120, spread: 70, origin: { y: 0.6 } });
-      alert('Lamaran Mitra Guru Terkirim! Kualifikasi Anda sedang ditinjau Kepala Sekolah. Tunggu konfirmasi akun aktif sebelum login.');
+      alert('Pendaftaran Berhasil! 🎉 Profil Anda kini langsung tampil di halaman depan etalase dan sedang menunggu verifikasi Kepala Sekolah.');
+      
       setTutorName('');
       setTutorPhone('');
       setTutorPassword('');
       setTutorCampus('');
       setTutorMajor('');
       setTutorAchievements('');
+      setTutorAvatarFile(null);
       setCertFile(null);
+
+      // Refresh data guru langsung di layar utama
+      fetchRegisteredTutors();
     } catch (err: any) {
       alert('Gagal mengirim lamaran guru: ' + err.message);
     } finally {
@@ -286,7 +293,7 @@ export default function HomePage() {
     }
   };
 
-  // 3. Eksekusi Login Terpadu (Dengan Verifikasi Status ACC)
+  // 3. Eksekusi Login Terpadu
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginLoading(true);
@@ -305,7 +312,6 @@ export default function HomePage() {
 
         if (error || !data) throw new Error('Akun murid tidak ditemukan!');
 
-        // Gembok verifikasi Kepala Sekolah
         if (!data.is_approved && data.status !== 'verified') {
           throw new Error('Akun Anda masih dalam antrean verifikasi pembayaran oleh Kepala Sekolah. Silakan tunggu konfirmasi via WhatsApp.');
         }
@@ -327,7 +333,6 @@ export default function HomePage() {
 
         if (error || !data) throw new Error('Akun guru tidak ditemukan!');
 
-        // Gembok verifikasi Kepala Sekolah
         if (!data.is_approved) {
           throw new Error('Pendaftaran akun guru Anda sedang ditinjau Kepala Sekolah. Akun belum aktif sebelum disetujui.');
         }
@@ -338,7 +343,6 @@ export default function HomePage() {
         localStorage.setItem('cerdas_tutor_phone', loginPhone.trim());
         router.push('/guru');
       } else {
-        // Kepala Sekolah (Admin)
         const { data: authSettings } = await supabase
           .from('admin_auth_settings')
           .select('*')
@@ -424,7 +428,7 @@ export default function HomePage() {
               <button
                 type="button"
                 onClick={() => setRoleTab('murid')}
-                className={`px-3.5 py-1.5 rounded-xl transition-all ${
+                className={`px-3.5 py-1.5 rounded-xl transition-all cursor-pointer ${
                   roleTab === 'murid' ? 'bg-sky-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
@@ -433,7 +437,7 @@ export default function HomePage() {
               <button
                 type="button"
                 onClick={() => setRoleTab('tutor')}
-                className={`px-3.5 py-1.5 rounded-xl transition-all ${
+                className={`px-3.5 py-1.5 rounded-xl transition-all cursor-pointer ${
                   roleTab === 'tutor' ? 'bg-amber-500 text-amber-950 shadow-xs' : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
@@ -510,7 +514,7 @@ export default function HomePage() {
               <p className="text-xs sm:text-sm text-slate-600 font-medium leading-relaxed max-w-xl">
                 {roleTab === 'murid'
                   ? 'Daftar sekarang, verifikasi pembayaran dengan Kepala Sekolah, lalu tentukan hari les dan pilih mentor idola sendiri langsung di dalam portal belajarmu!'
-                  : 'Bergabung bersama 1.200+ mahasiswa & sarjana berprestasi PTN. Ambil jadwal bimbingan belajar murid di bursa tugas dengan honor pasti cair tepat waktu.'}
+                  : 'Bergabung bersama mahasiswa & sarjana berprestasi. Profilmu langsung muncul di etalase dan kamu bisa mengambil bursa murid setelah diverifikasi Kepala Sekolah.'}
               </p>
 
               {/* Metric Pills */}
@@ -561,55 +565,73 @@ export default function HomePage() {
           /* ================= MODE MURID ================= */
           <div className="space-y-8">
             
-            {/* ETALASE INSPIRASI KAKAK TUTOR */}
+            {/* ETALASE DINAMIS: PROFIL KAKAK GURU YANG DAFTAR */}
             <section className="space-y-3">
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-base font-black text-slate-900 flex items-center gap-1.5">
                     <span>Inspirasi Kakak Mentor Berprestasi</span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 font-bold border border-rose-200">
-                      Top 5% Seleksi PTN ⭐
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold border border-emerald-300 flex items-center gap-1">
+                      <Sparkles className="w-3 h-3" />
+                      <span>{dynamicTutors.length} Tutor Bergabung</span>
                     </span>
                   </h2>
-                  <p className="text-xs text-slate-500 font-medium">Bisa kamu pilih langsung setelah akun pendaftaranmu aktif!</p>
+                  <p className="text-xs text-slate-500 font-medium">Bisa langsung kamu pilih saat mengatur jadwal les privat di dalam akunmu!</p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {TUTORS.map((tutor) => (
-                  <div
-                    key={tutor.id}
-                    className="bg-white rounded-3xl p-4 border-2 border-slate-200 relative flex flex-col justify-between shadow-sm"
-                  >
-                    <span className="text-[9px] font-black px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 w-max mb-2">
-                      {tutor.badge}
-                    </span>
+              {dynamicTutors.length === 0 ? (
+                <div className="p-8 bg-white rounded-3xl border border-slate-200 text-center text-xs text-slate-400">
+                  Belum ada profil guru yang terdaftar. Guru yang mendaftar akan langsung tampil di sini.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {dynamicTutors.map((tutor) => {
+                    // Fallback avatar robotik otomatis jika guru tidak memilih foto/preset
+                    const avatarSrc = tutor.avatar_url || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(tutor.full_name)}&backgroundColor=b6e3f4`;
                     
-                    <div className="flex items-start gap-3">
-                      <img
-                        src={tutor.avatar}
-                        alt={tutor.name}
-                        className="w-14 h-14 rounded-2xl object-cover border-2 border-slate-100 shrink-0"
-                      />
-                      <div>
-                        <span className="text-[10px] font-bold text-sky-600 block">{tutor.campus}</span>
-                        <h4 className="font-black text-xs text-slate-900 leading-tight mt-0.5">{tutor.name}</h4>
-                        <p className="text-[10px] text-slate-500 mt-0.5 leading-snug">{tutor.subject}</p>
-                      </div>
-                    </div>
+                    return (
+                      <div
+                        key={tutor.id}
+                        className="bg-white rounded-3xl p-4 border-2 border-slate-200 hover:border-sky-300 transition-all relative flex flex-col justify-between shadow-sm"
+                      >
+                        <span className="text-[9px] font-black px-2.5 py-0.5 rounded-full bg-sky-100 text-sky-900 w-max mb-2">
+                          {tutor.is_approved ? 'RESMI TERVERIFIKASI ⭐' : 'PENGAJAR SIAGA 🎓'}
+                        </span>
+                        
+                        <div className="flex items-start gap-3">
+                          <img
+                            src={avatarSrc}
+                            alt={tutor.full_name}
+                            className="w-14 h-14 rounded-2xl object-cover border-2 border-slate-100 shrink-0 bg-slate-50"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <span className="text-[10px] font-bold text-sky-600 block truncate">{tutor.campus || 'Universitas'}</span>
+                            <h4 className="font-black text-xs text-slate-900 leading-tight mt-0.5 truncate">{tutor.full_name}</h4>
+                            <p className="text-[10px] text-slate-500 mt-0.5 truncate">{tutor.major || 'Pendidikan'}</p>
+                          </div>
+                        </div>
 
-                    <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-1 font-bold text-amber-500">
-                        <span>⭐ {tutor.rating}</span>
-                        <span className="text-[10px] text-slate-400 font-normal">({tutor.sessions} sesi)</span>
+                        {tutor.achievements && (
+                          <p className="text-[10px] text-slate-600 italic bg-slate-50 p-2 rounded-xl border border-slate-100 mt-3 line-clamp-2">
+                            "{tutor.achievements}"
+                          </p>
+                        )}
+
+                        <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-1 font-bold text-amber-500">
+                            <span>⭐ 4.99</span>
+                            <span className="text-[10px] text-slate-400 font-normal">(Aktif)</span>
+                          </div>
+                          <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">
+                            Siap Les
+                          </span>
+                        </div>
                       </div>
-                      <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">
-                        Standar PTN
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </section>
 
             {/* PILIH PAKET BELAJAR */}
@@ -685,7 +707,7 @@ export default function HomePage() {
               </div>
             </section>
 
-            {/* FORM PENDAFTARAN BERSIH (TANPA HARI/JAM/MENTOR) */}
+            {/* FORM PENDAFTARAN SISWA BARU */}
             <section className="bg-white p-6 sm:p-8 rounded-3xl border-2 border-sky-100 shadow-sm space-y-4 max-w-3xl mx-auto" id="workspace-pesan">
               <div className="border-b border-slate-100 pb-3">
                 <div className="flex items-center gap-2">
@@ -864,6 +886,60 @@ export default function HomePage() {
                 </span>
                 <h2 className="text-lg font-black text-slate-900 mt-2">Formulir Rekrutmen Mitra Guru</h2>
                 <p className="text-xs text-slate-500">Honor pasti Rp 30.000 / 90 menit langsung dihitung per kehadiran tatap muka.</p>
+              </div>
+
+              {/* FOTO PROFIL / AVATAR ANIMASI PILIHAN */}
+              <div className="p-4 bg-amber-50/60 rounded-2xl border border-amber-200 space-y-3">
+                <div className="flex justify-between items-center">
+                  <label className="font-bold text-slate-800 text-xs">Pilih Tampilan Muka / Avatar Profil</label>
+                  <div className="flex gap-1 p-0.5 bg-white rounded-lg border text-[10px] font-bold">
+                    <button
+                      type="button"
+                      onClick={() => setAvatarOptionType('preset')}
+                      className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${avatarOptionType === 'preset' ? 'bg-amber-500 text-amber-950' : 'text-slate-500'}`}
+                    >
+                      Kartun Ceria
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAvatarOptionType('upload')}
+                      className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${avatarOptionType === 'upload' ? 'bg-amber-500 text-amber-950' : 'text-slate-500'}`}
+                    >
+                      Upload Foto Asli
+                    </button>
+                  </div>
+                </div>
+
+                {avatarOptionType === 'preset' ? (
+                  <div className="space-y-2">
+                    <p className="text-[11px] text-slate-500">Pilih salah satu karakter animasi kesayangan murid:</p>
+                    <div className="flex items-center gap-3 overflow-x-auto pb-1">
+                      {AVATAR_PRESETS.map((preset) => (
+                        <div
+                          key={preset.id}
+                          onClick={() => setSelectedAvatarPreset(preset.url)}
+                          className={`flex flex-col items-center gap-1 cursor-pointer p-2 rounded-2xl border-2 transition-all bg-white shrink-0 ${
+                            selectedAvatarPreset === preset.url ? 'border-amber-500 ring-2 ring-amber-200 scale-105' : 'border-slate-200 opacity-70 hover:opacity-100'
+                          }`}
+                        >
+                          <img src={preset.url} alt={preset.name} className="w-12 h-12 rounded-xl" />
+                          <span className="text-[9px] font-bold text-slate-600">{preset.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      required={avatarOptionType === 'upload'}
+                      onChange={(e) => setTutorAvatarFile(e.target.files ? e.target.files[0] : null)}
+                      className="w-full text-[11px] text-slate-500 file:mr-2 file:py-2 file:px-3 file:rounded-xl file:border-0 file:bg-amber-200 file:text-amber-900 file:font-bold"
+                    />
+                    <p className="text-[10px] text-slate-400 mt-1">*Disarankan foto tersenyum ramah dan berpenampilan rapi.</p>
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 text-xs">
@@ -1095,7 +1171,6 @@ export default function HomePage() {
                     </div>
                   </>
                 ) : (
-                  /* Admin / Kepala Sekolah Auth */
                   <div className="space-y-2.5">
                     <div className="flex bg-slate-100 p-0.5 rounded-xl border text-[11px] font-bold">
                       <button
