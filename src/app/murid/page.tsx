@@ -58,6 +58,8 @@ export default function MuridDashboard() {
   const [newScheduleDay, setNewScheduleDay] = useState('Sen');
   const [newScheduleTime, setNewScheduleTime] = useState('16:00');
   const [newScheduleTopic, setNewScheduleTopic] = useState('Matematika & Logika');
+  const [newScheduleAddress, setNewScheduleAddress] = useState('');
+  const [newScheduleMapsUrl, setNewScheduleMapsUrl] = useState('');
   const [selectedTutorChoice, setSelectedTutorChoice] = useState('');
   const [availableTutors, setAvailableTutors] = useState<any[]>([]);
   const [savingNewSchedule, setSavingNewSchedule] = useState(false);
@@ -140,6 +142,8 @@ export default function MuridDashboard() {
 
       if (!error && data && (data.is_approved || data.is_verified)) {
         setStudentProfile(data);
+        setNewScheduleAddress(data.address || '');
+        setNewScheduleMapsUrl(data.maps_url || '');
         setIsLoggedIn(true);
         fetchDashboardData(phone.trim(), data.student_name);
       }
@@ -188,6 +192,8 @@ export default function MuridDashboard() {
       }
 
       setStudentProfile(data);
+      setNewScheduleAddress(data.address || '');
+      setNewScheduleMapsUrl(data.maps_url || '');
       localStorage.setItem('cerdas_student_phone', studentPhone.trim());
       setIsLoggedIn(true);
       fetchDashboardData(studentPhone.trim(), data.student_name);
@@ -267,7 +273,7 @@ export default function MuridDashboard() {
     if (helpData) setHomeworkHelpList(helpData);
   };
 
-  // Mengambil seluruh daftar guru yang terdaftar tanpa filter ketat
+  // Mengambil seluruh daftar guru yang terdaftar
   const fetchTutorsForSelection = async () => {
     try {
       const { data, error } = await supabase
@@ -283,7 +289,7 @@ export default function MuridDashboard() {
     }
   };
 
-  // 2. Pembuatan Jadwal Baru Mandiri oleh Siswa (Dengan Proteksi Anti-Duplikasi)
+  // 2. Pembuatan / Pembaruan Jadwal (Anti-Duplikasi Berdasarkan Nomor WhatsApp Siswa)
   const handleSaveNewSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!studentProfile) return;
@@ -299,11 +305,12 @@ export default function MuridDashboard() {
       const payload: Record<string, any> = {
         student_name: studentProfile.student_name,
         student_phone: studentProfile.phone_number,
-        student_address: studentProfile.address || 'Alamat Siswa',
+        student_address: newScheduleAddress || studentProfile.address || 'Alamat Siswa',
+        maps_url: newScheduleMapsUrl || studentProfile.maps_url || null,
         day_of_week: newScheduleDay,
         session_time: `${newScheduleTime}:00`,
         today_topic: newScheduleTopic,
-        month_period: firstDayOfMonth, // Nilai wajib untuk mencegah error NOT NULL
+        month_period: firstDayOfMonth,
         target_sessions: 8,
         completed_sessions: 0,
         status: scheduleStatus,
@@ -311,25 +318,28 @@ export default function MuridDashboard() {
         is_substitute_needed: false
       };
 
-      // CEGAH DUPLIKASI: Jika murid sudah punya jadwal aktif, perbarui (UPDATE)
-      if (schedules.length > 0) {
+      // Cek apakah siswa ini sudah memiliki entri jadwal di Supabase
+      const { data: existingSchedules } = await supabase
+        .from('schedules')
+        .select('id')
+        .eq('student_phone', studentProfile.phone_number);
+
+      if (existingSchedules && existingSchedules.length > 0) {
+        // Jika sudah ada, PERBARUI (UPDATE) data jadwal yang ada
         const { error: updErr } = await supabase
           .from('schedules')
           .update(payload)
-          .eq('id', schedules[0].id);
+          .eq('student_phone', studentProfile.phone_number);
 
         if (updErr) throw updErr;
       } else {
-        // Buat satu baris baru jika belum punya
+        // Jika belum ada, BUAT (INSERT) satu baris baru
         let { error: schErr } = await supabase
           .from('schedules')
           .insert([{ ...payload, student_grade: studentProfile.grade || 'SMP' }]);
 
-        // Fallback jika skema database menolak student_grade akibat cache skema
         if (schErr && schErr.message.includes('student_grade')) {
-          const retryResult = await supabase
-            .from('schedules')
-            .insert([payload]);
+          const retryResult = await supabase.from('schedules').insert([payload]);
           schErr = retryResult.error;
         }
 
@@ -338,14 +348,18 @@ export default function MuridDashboard() {
 
       await supabase
         .from('registrations')
-        .update({ has_scheduled: true })
+        .update({ 
+          has_scheduled: true,
+          address: payload.student_address,
+          maps_url: payload.maps_url 
+        })
         .eq('id', studentProfile.id);
 
       confetti({ particleCount: 90, spread: 70 });
       alert(
         tutorAssigned 
           ? `Horeee! 🎉 Jadwal berhasil disimpan! Mentor kamu adalah Kak ${tutorAssigned}.` 
-          : 'Horeee! 🎉 Jadwal berhasil disimpan dan masuk ke bursa pengajar!'
+          : 'Horeee! 🎉 Jadwal berhasil disimpan dan telah masuk ke bursa pengajar!'
       );
 
       setShowCreateScheduleModal(false);
@@ -1023,10 +1037,20 @@ export default function MuridDashboard() {
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                               <div className="p-3 bg-slate-50 dark:bg-[#1c1f29] rounded-xl text-xs space-y-1">
                                 <span className="text-slate-400 font-semibold text-[10px] uppercase">Lokasi Pertemuan</span>
-                                <p className="font-bold text-slate-800 dark:text-white flex items-center gap-1">
-                                  <Icon name="home_pin" className="text-emerald-600 text-[16px]" />
-                                  {studentProfile?.address || 'Alamat Siswa'}
+                                <p className="font-bold text-slate-800 dark:text-white flex items-center gap-1 truncate">
+                                  <Icon name="home_pin" className="text-emerald-600 text-[16px] shrink-0" />
+                                  <span className="truncate">{todaySchedule?.student_address || studentProfile?.address || 'Alamat Siswa'}</span>
                                 </p>
+                                {(todaySchedule?.maps_url || studentProfile?.maps_url) && (
+                                  <a
+                                    href={todaySchedule?.maps_url || studentProfile?.maps_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-[11px] text-sky-600 dark:text-sky-400 font-bold hover:underline inline-flex items-center gap-1 mt-0.5"
+                                  >
+                                    <Icon name="map" className="text-[13px] text-rose-500" /> Lihat Lokasi di Google Maps
+                                  </a>
+                                )}
                               </div>
                               <div className="p-3 bg-slate-50 dark:bg-[#1c1f29] rounded-xl text-xs space-y-1">
                                 <span className="text-slate-400 font-semibold text-[10px] uppercase">Status Pertemuan</span>
@@ -1353,6 +1377,16 @@ export default function MuridDashboard() {
                               </div>
                               <h4 className="text-base font-bold mt-1">{s.today_topic || 'Bimbingan Belajar'}</h4>
                               <p className="text-xs text-slate-500">Tutor: {s.claimed_by_tutor_name || 'Menunggu Pengambilan di Bursa'}</p>
+                              {(s.maps_url || studentProfile?.maps_url) && (
+                                <a
+                                  href={s.maps_url || studentProfile?.maps_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-[11px] text-sky-600 dark:text-sky-400 font-bold hover:underline inline-flex items-center gap-1 mt-1"
+                                >
+                                  <Icon name="map" className="text-[14px] text-rose-500" /> Buka Lokasi di Google Maps
+                                </a>
+                              )}
                             </div>
                             <div className="flex gap-2">
                               <button
@@ -1612,11 +1646,11 @@ export default function MuridDashboard() {
           </nav>
         )}
 
-        {/* MODAL PENGATURAN JADWAL MANDIRI & PILIH MENTOR */}
+        {/* MODAL PENGATURAN JADWAL MANDIRI & PILIH MENTOR (DENGAN TITIK GOOGLE MAPS) */}
         <AnimatePresence>
           {showCreateScheduleModal && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-              <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="w-full max-w-md rounded-3xl bg-white dark:bg-[#181b25] border border-slate-200 dark:border-[#31353f] p-6 space-y-4 text-xs">
+              <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="w-full max-w-md rounded-3xl bg-white dark:bg-[#181b25] border border-slate-200 dark:border-[#31353f] p-6 space-y-4 text-xs max-h-[90vh] overflow-y-auto">
                 <div className="flex justify-between items-center border-b border-slate-100 dark:border-[#31353f] pb-3">
                   <h3 className="font-bold text-sm">Pengaturan Jadwal KBM Mandiri</h3>
                   <button onClick={() => setShowCreateScheduleModal(false)} className="cursor-pointer"><Icon name="close" /></button>
@@ -1660,8 +1694,48 @@ export default function MuridDashboard() {
                     </div>
                   </div>
 
+                  {/* ALAMAT RUMAH & DETEKSI TITIK GPS GOOGLE MAPS */}
+                  <div className="space-y-1.5 p-3 rounded-xl bg-slate-50 dark:bg-[#1c1f29] border border-slate-200 dark:border-[#31353f]">
+                    <div className="flex justify-between items-center">
+                      <label className="font-bold text-slate-700 dark:text-slate-200">🏠 Lokasi Rumah KBM</label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (navigator.geolocation) {
+                            navigator.geolocation.getCurrentPosition(
+                              (pos) => {
+                                const lat = pos.coords.latitude;
+                                const lng = pos.coords.longitude;
+                                const url = `https://www.google.com/maps?q=${lat},${lng}`;
+                                setNewScheduleMapsUrl(url);
+                                alert('Titik koordinat GPS rumah berhasil diambil! 📍');
+                              },
+                              () => alert('Gagal membaca koordinat GPS perangkat. Anda dapat menempelkan link Google Maps secara manual.')
+                            );
+                          }
+                        }}
+                        className="text-[10px] font-bold text-emerald-600 dark:text-[#4edea3] hover:underline flex items-center gap-1 cursor-pointer"
+                      >
+                        <Icon name="my_location" className="text-[14px]" /> Ambil Titik GPS Saya
+                      </button>
+                    </div>
+                    <textarea
+                      rows={2}
+                      required
+                      value={newScheduleAddress}
+                      onChange={(e) => setNewScheduleAddress(e.target.value)}
+                      placeholder="Nama Jalan, Nomor Rumah, RT/RW, Patokan..."
+                      className="w-full p-2 rounded-lg border bg-white dark:bg-[#141720] border-slate-200 dark:border-[#31353f]"
+                    />
+                    {newScheduleMapsUrl && (
+                      <div className="text-[10px] text-emerald-600 dark:text-[#4edea3] flex items-center gap-1 font-semibold truncate">
+                        <Icon name="check_circle" className="text-[13px]" /> Koordinat Peta Tersimpan
+                      </div>
+                    )}
+                  </div>
+
                   <div>
-                    <label className="font-semibold block mb-1">Pilih Mentor Bimbingan (Opsional)</label>
+                    <label className="font-semibold block mb-1">Pilih Mentor Bimbingan</label>
                     <select
                       value={selectedTutorChoice}
                       onChange={(e) => setSelectedTutorChoice(e.target.value)}
