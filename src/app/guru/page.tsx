@@ -49,6 +49,7 @@ export default function GuruDashboard() {
 
   // Status & Filter
   const [activeCalendarDay, setActiveCalendarDay] = useState('Sel');
+  const [scheduleFilterTab, setScheduleFilterTab] = useState<'mendatang' | 'riwayat' | 'izin'>('mendatang');
   const [studentJenjangFilter, setStudentJenjangFilter] = useState('all');
   const [studentSearchQuery, setStudentSearchQuery] = useState('');
   const [isReadyToTeach, setIsReadyToTeach] = useState(true);
@@ -854,6 +855,9 @@ export default function GuruDashboard() {
 
   const tutorAvatarDisplay = tutorProfile?.avatar_url || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(tutorProfile?.full_name || 'Tutor')}&backgroundColor=b6e3f4`;
 
+  // Siswa sesi prioritas utama hari ini
+  const prioritySchedule = myAssignedSchedules[0] || null;
+
   return (
     <div className={isDarkMode ? 'dark' : ''}>
       <div className="bg-[#f8fafc] text-[#0f172a] dark:bg-[#0a0e17] dark:text-[#dfe2ef] font-['Plus_Jakarta_Sans',sans-serif] min-h-screen flex flex-col antialiased transition-colors duration-200">
@@ -1003,6 +1007,11 @@ export default function GuruDashboard() {
               </span>
             </div>
 
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-50 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-900/40 text-xs font-bold text-amber-800 dark:text-amber-300">
+              <Icon name="monetization_on" className="text-[18px] text-amber-600" />
+              <span>+340.000 Hari Ini</span>
+            </div>
+
             <button
               onClick={() => alert('Tidak ada notifikasi baru.')}
               className="relative p-2 rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-[#262a34] transition-colors cursor-pointer"
@@ -1131,45 +1140,7 @@ export default function GuruDashboard() {
                       </div>
                     </div>
 
-                    {/* Panggilan Pengganti Darurat */}
-                    {emergencySubstitutes.length > 0 && (
-                      <div className="relative overflow-hidden p-6 rounded-2xl bg-gradient-to-r from-rose-50 via-white to-amber-50/40 dark:from-rose-950/40 dark:via-[#181b25] dark:to-amber-950/20 border border-rose-200 dark:border-rose-900 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <div className="flex items-start md:items-center gap-4">
-                          <div className="w-11 h-11 rounded-xl bg-rose-600 flex items-center justify-center text-white shrink-0 shadow-sm">
-                            <Icon name="e911_emergency" className="text-[24px] animate-bounce" />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-bold uppercase tracking-wider text-rose-700 dark:text-rose-400">Panggilan Darurat • Butuh Tutor Pengganti</span>
-                              <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 text-[10px] font-extrabold">+Rp 15.000 Bonus Kilat</span>
-                            </div>
-                            <h3 className="font-bold text-base text-slate-900 dark:text-white mt-0.5">
-                              {emergencySubstitutes[0].student_name} ({emergencySubstitutes[0].day_of_week} • {emergencySubstitutes[0].session_time?.substring(0, 5)} WIB)
-                            </h3>
-                            <div className="flex items-center gap-2 mt-0.5">
-                              <p className="text-xs text-slate-500 dark:text-[#bbcabf] truncate">{emergencySubstitutes[0].student_address}</p>
-                              <a
-                                href={emergencySubstitutes[0].maps_url || (emergencySubstitutes[0].student_address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(emergencySubstitutes[0].student_address)}` : 'https://maps.google.com')}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-[10px] text-sky-600 dark:text-sky-400 font-bold hover:underline shrink-0 inline-flex items-center gap-0.5"
-                              >
-                                <Icon name="map" className="text-[12px] text-rose-500" /> Cek Peta
-                              </a>
-                            </div>
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => handleAcceptSubstitute(emergencySubstitutes[0])}
-                          className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-sm transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
-                        >
-                          <Icon name="bolt" className="text-[18px]" />
-                          <span>Ambil Sesi Ini Sekarang</span>
-                        </button>
-                      </div>
-                    )}
-
-                    {/* 4 Cards Metrik */}
+                    {/* 4 Cards Metrik Ringkasan Beranda */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                       <div className="p-5 rounded-2xl bg-white dark:bg-[#181b25] border border-slate-200 dark:border-[#31353f] shadow-xs flex flex-col justify-between">
                         <div className="flex justify-between items-center text-slate-400">
@@ -1218,318 +1189,111 @@ export default function GuruDashboard() {
                       </div>
                     </div>
 
-                    {/* Sesi KBM Aktif, Quick Tools & Bursa */}
+                    {/* Sesi KBM Aktif & Quick Tools Beranda */}
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                      
-                      {/* Kolom 1: Sesi KBM Berjalan Hari Ini (KARTU LENGKAP PETA DENGAN TEMA RESPONSIF) */}
-                      <div className="lg:col-span-5 space-y-6">
-                        {myAssignedSchedules.length === 0 ? (
-                          <div className="p-6 bg-white dark:bg-[#181b25] rounded-2xl border border-slate-200 dark:border-[#31353f] text-center text-xs text-slate-400 space-y-2">
-                            <Icon name="event_busy" className="text-[32px] text-slate-300 mx-auto" />
-                            <p>Anda belum memiliki jadwal murid aktif.</p>
-                            <p className="text-emerald-600 font-bold">Silakan ambil jadwal baru di kolom Bursa Lowongan Murid di sebelah kanan!</p>
-                          </div>
-                        ) : (
-                          myAssignedSchedules.slice(0, 1).map((sch) => {
-                            const timerSec = activeTimers[sch.id] || 0;
-                            const isTimerRunning = sch.is_timer_active && timerSec > 0;
-                            const googleMapsTargetUrl = sch.maps_url || (sch.student_address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(sch.student_address)}` : 'https://maps.google.com');
-
-                            // Durasi Belajar Digital
-                            const elapsedTotal = Math.max(0, 90 * 60 - timerSec);
-                            const elapsedHours = String(Math.floor(elapsedTotal / 3600)).padStart(2, '0');
-                            const elapsedMinutes = String(Math.floor((elapsedTotal % 3600) / 60)).padStart(2, '0');
-                            const elapsedSeconds = String(elapsedTotal % 60).padStart(2, '0');
-                            const progressPercentage = Math.min(100, Math.round((elapsedTotal / (90 * 60)) * 100));
-
-                            const studentAvatarUrl = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(sch.student_name)}&backgroundColor=b6e3f4`;
-
-                            return (
-                              <div key={sch.id} className="space-y-4">
-                                {/* Header Status Sesi */}
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2">
-                                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                                    <h2 className="text-base font-bold text-slate-900 dark:text-white">
-                                      Sesi Tatap Muka Sedang Berjalan
-                                    </h2>
-                                  </div>
-                                  <span className="px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-[#4edea3] text-xs font-bold border border-emerald-200/60 dark:border-emerald-900">
-                                    {sch.session_time ? `${sch.session_time.substring(0, 5)} WIB` : '16:00 WIB'}
-                                  </span>
-                                </div>
-
-                                {/* KARTU UTAMA SESI KBM (ADAPTIF TERANG / GELAP) */}
-                                <div className="p-5 sm:p-6 rounded-[2rem] bg-white dark:bg-[#121622] border-2 border-slate-200/80 dark:border-[#23293a] text-slate-800 dark:text-white shadow-xl space-y-5 transition-colors duration-200">
-                                  
-                                  {/* 1. Header Profil Murid & Kontak Wali */}
-                                  <div className="flex items-start justify-between gap-3">
-                                    <div className="flex items-center gap-3">
-                                      <div className="relative">
-                                        <img
-                                          src={studentAvatarUrl}
-                                          alt={sch.student_name}
-                                          className="w-13 h-13 rounded-2xl object-cover border-2 border-emerald-500/80 bg-slate-100 dark:bg-slate-800 p-0.5 shadow-sm"
-                                        />
-                                        <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 border-2 border-white dark:border-[#121622] flex items-center justify-center text-white text-[9px] font-bold">
-                                          ✓
-                                        </span>
-                                      </div>
-                                      <div>
-                                        <div className="flex items-center gap-2 flex-wrap">
-                                          <h3 className="font-extrabold text-base tracking-tight text-slate-900 dark:text-white">{sch.student_name}</h3>
-                                          <span className="px-2 py-0.5 rounded-md bg-amber-50 dark:bg-[#23293a] text-amber-800 dark:text-amber-400 font-bold text-[10px] tracking-wide border border-amber-200 dark:border-amber-400/20">
-                                            {sch.student_grade || 'SMP'}
-                                          </span>
-                                        </div>
-                                        <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">{sch.today_topic || 'Program Bimbingan Belajar'}</p>
-                                        <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">Wali Murid: {sch.student_phone ? `+62 ${sch.student_phone.slice(-9, -4)}-xxxx` : 'Terdaftar'}</p>
-                                      </div>
-                                    </div>
-
-                                    <a
-                                      href={sch.student_phone ? `https://wa.me/${sch.student_phone.replace(/^0/, '62')}` : '#'}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="w-10 h-10 rounded-2xl bg-slate-100 dark:bg-[#1c2233] hover:bg-slate-200 dark:hover:bg-[#283149] border border-slate-200 dark:border-slate-700/60 flex items-center justify-center text-emerald-600 dark:text-emerald-400 transition-transform active:scale-95 shadow-xs shrink-0 cursor-pointer"
-                                      title="Hubungi Orang Tua Siswa"
-                                    >
-                                      <Icon name="call" className="text-[18px]" />
-                                    </a>
-                                  </div>
-
-                                  {/* 2. Informasi Alamat & Jarak */}
-                                  <div className="flex items-center justify-between gap-2 text-xs">
-                                    <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300 truncate">
-                                      <Icon name="location_on" className="text-amber-500 text-[16px] shrink-0" />
-                                      <span className="truncate">{sch.student_address || 'Jl. Boulevard Raya, Kelapa Gading'}</span>
-                                    </div>
-                                    <span className="text-emerald-600 dark:text-emerald-400 font-extrabold text-[11px] shrink-0">1.2 km (ETA 4 min)</span>
-                                  </div>
-
-                                  {/* 3. TAMPILAN MINI MAP GOOGLE TERINTEGRASI */}
-                                  <div className="relative w-full h-44 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700/60 shadow-inner bg-slate-100 dark:bg-slate-900">
-                                    <iframe
-                                      title="Peta Lokasi Rumah Murid"
-                                      width="100%"
-                                      height="100%"
-                                      frameBorder="0"
-                                      scrolling="no"
-                                      src={`https://maps.google.com/maps?q=${encodeURIComponent(sch.student_address || 'Kelapa Gading Jakarta')}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
-                                      className="w-full h-full filter contrast-105 pointer-events-none"
-                                    />
-                                    <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none" />
-                                    
-                                    {/* Badge Indikator Radius GPS Aktif */}
-                                    <div className="absolute bottom-2.5 left-3 px-3 py-1 rounded-full bg-white/90 dark:bg-slate-950/85 backdrop-blur-md border border-slate-200 dark:border-slate-700 text-[10px] font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5 shadow-sm">
-                                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                                      <span>GPS Aktif: Presensi Radius Valid (8m)</span>
-                                    </div>
-
-                                    {/* Tombol Rute Maps */}
-                                    <a
-                                      href={googleMapsTargetUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="absolute top-2.5 right-3 px-3.5 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-[11px] font-extrabold flex items-center gap-1.5 shadow-md transition-all active:scale-95 cursor-pointer"
-                                    >
-                                      <Icon name="near_me" className="text-[14px]" />
-                                      <span>Rute Maps 🚗</span>
-                                    </a>
-                                  </div>
-
-                                  {/* 4. Ruang Kelas Online */}
-                                  <button
-                                    onClick={() => setOnlineClassSchedule(sch)}
-                                    className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl shadow-sm flex items-center justify-center gap-2 transition-all cursor-pointer"
-                                  >
-                                    <Icon name="video_camera_front" className="text-[18px]" />
-                                    <span>Buka Ruang Kelas Online (Jitsi Meet)</span>
-                                  </button>
-
-                                  {/* 5. Stopwatch Live & Progres Belajar */}
-                                  <div className="p-4 rounded-2xl bg-slate-50 dark:bg-[#181e2e] border border-slate-200 dark:border-slate-800 space-y-3">
-                                    <div className="flex justify-between items-center text-[11px]">
-                                      <span className="text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">SISA WAKTU BELAJAR EFEKTIF</span>
-                                      <span className="text-amber-600 dark:text-amber-400 font-extrabold">Telah Berjalan: {Math.floor(elapsedTotal / 60)} Menit</span>
-                                    </div>
-
-                                    <div className="flex items-center justify-between">
-                                      <div className="text-3xl sm:text-4xl font-black font-mono tracking-widest text-emerald-600 dark:text-emerald-400">
-                                        {elapsedHours} <span className="text-slate-400 dark:text-slate-500">:</span> {elapsedMinutes} <span className="text-slate-400 dark:text-slate-500">:</span> {elapsedSeconds}
-                                      </div>
-                                      <div className="text-right">
-                                        <span className="text-[10px] text-slate-400 block font-semibold">Target 90 Menit</span>
-                                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{sch.completed_sessions || 0} / {sch.target_sessions || 8} Sesi</span>
-                                      </div>
-                                    </div>
-
-                                    {/* Progress Bar */}
-                                    <div className="w-full h-2 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
-                                      <div
-                                        className="h-full bg-emerald-500 dark:bg-emerald-400 rounded-full transition-all duration-500"
-                                        style={{ width: `${progressPercentage}%` }}
-                                      />
-                                    </div>
-
-                                    <div className="flex justify-between items-center text-[11px] pt-1">
-                                      <span className="text-slate-500 dark:text-slate-400 font-medium">Materi: {sch.today_topic || 'Bimbingan Belajar'}</span>
-                                      <span className="text-emerald-600 dark:text-emerald-400 font-bold">{progressPercentage}% Lengkap</span>
-                                    </div>
-
-                                    {/* Tombol Timer Jeda & Selesai */}
-                                    <div className="grid grid-cols-2 gap-2 pt-2">
-                                      {!sch.is_timer_active ? (
-                                        <button
-                                          onClick={() => handleStartSessionTimer(sch)}
-                                          className="py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-xs col-span-2"
-                                        >
-                                          <Icon name="play_arrow" className="text-[16px]" /> Mulai Sesi KBM
-                                        </button>
-                                      ) : (
-                                        <>
-                                          <button
-                                            onClick={() => alert('Sesi sedang berjalan. Waktu terus dihitung otomatis.')}
-                                            className="py-2.5 px-3 rounded-xl bg-slate-200/80 hover:bg-slate-300 dark:bg-[#232a3d] dark:hover:bg-[#2d364e] text-slate-800 dark:text-slate-200 text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 border border-slate-300 dark:border-slate-700/60"
-                                          >
-                                            <Icon name="pause_circle" className="text-[16px] text-amber-500" /> Jeda Sesi
-                                          </button>
-                                          <button
-                                            onClick={() => { setPhotoModalTarget(sch); setKbmPhotoFile(null); }}
-                                            className="py-2.5 px-3 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/50 text-rose-600 dark:text-rose-300 text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 border border-rose-200 dark:border-rose-900/60"
-                                          >
-                                            <Icon name="stop_circle" className="text-[16px] text-rose-500" /> Selesaikan Sesi
-                                          </button>
-                                        </>
-                                      )}
-                                    </div>
-                                  </div>
-
-                                  {/* 6. Tombol Check-In Foto KBM & Lapor Ortu */}
-                                  <button
-                                    onClick={() => { setPhotoModalTarget(sch); setKbmPhotoFile(null); }}
-                                    className="w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
-                                  >
-                                    <Icon name="photo_camera" className="text-[20px]" />
-                                    <span>Check-In Foto KBM & Lapor Ortu Langsung</span>
-                                  </button>
-
-                                </div>
-
-                                {/* KOTAK CATATAN KHUSUS ORANG TUA (ADAPTIF TERANG / GELAP) */}
-                                <div className="p-4 rounded-2xl bg-white dark:bg-[#141926] border border-slate-200 dark:border-slate-800 text-xs space-y-1.5 shadow-sm transition-colors duration-200">
-                                  <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-bold">
-                                    <Icon name="lightbulb" className="text-[18px]" />
-                                    <span>Catatan Khusus Orang Tua</span>
-                                  </div>
-                                  <p className="text-slate-600 dark:text-slate-300 italic pl-6 leading-relaxed">
-                                    "{sch.today_topic ? `${sch.student_name} perlu penguatan konsep ${sch.today_topic} untuk persiapan ujian pekan depan.` : 'Siswa siap belajar intensif tatap muka.'}"
-                                  </p>
-                                </div>
-                              </div>
-                            );
-                          })
-                        )}
-                      </div>
-
-                      {/* Kolom 2: Alat Manajemen Pembelajaran */}
-                      <div className="lg:col-span-4 space-y-6">
+                      <div className="lg:col-span-8 space-y-6">
+                        {/* TABEL DAFTAR SEMUA SISWA BIMBINGAN AKTIF */}
                         <div className="p-6 rounded-2xl bg-white dark:bg-[#181b25] border border-slate-200 dark:border-[#31353f] shadow-xs space-y-4">
-                          <h3 className="font-bold text-base">Alat Manajemen Pembelajaran</h3>
-                          <div className="grid grid-cols-2 gap-3 text-xs">
-                            <button
-                              onClick={() => {
-                                const target = myAssignedSchedules[0];
-                                if (target) {
-                                  setActiveAssignmentSchedule(target);
-                                  setAssignmentTitle('');
-                                } else alert('Pilih jadwal bimbingan terlebih dahulu.');
-                              }}
-                              className="p-3.5 rounded-xl bg-slate-50 dark:bg-[#1c1f29] border border-slate-200/80 dark:border-transparent hover:border-emerald-500 flex flex-col gap-1 text-left cursor-pointer transition-all"
-                            >
-                              <Icon name="assignment" className="text-cyan-600 text-[22px]" />
-                              <span className="font-bold text-slate-900 dark:text-white mt-1">Tugas & PR</span>
-                              <span className="text-[11px] text-slate-400">Beri latihan murid</span>
-                            </button>
-
-                            <button
-                              onClick={() => {
-                                const target = myAssignedSchedules[0];
-                                if (target) {
-                                  setActiveGoalSchedule(target);
-                                  setNewGoalText('');
-                                } else alert('Pilih jadwal bimbingan terlebih dahulu.');
-                              }}
-                              className="p-3.5 rounded-xl bg-slate-50 dark:bg-[#1c1f29] border border-slate-200/80 dark:border-transparent hover:border-emerald-500 flex flex-col gap-1 text-left cursor-pointer transition-all"
-                            >
-                              <Icon name="track_changes" className="text-emerald-600 text-[22px]" />
-                              <span className="font-bold text-slate-900 dark:text-white mt-1">Target Belajar</span>
-                              <span className="text-[11px] text-slate-400">Milestone siswa</span>
-                            </button>
-
-                            <button
-                              onClick={() => {
-                                const target = myAssignedSchedules[0];
-                                if (target) {
-                                  setActiveQuizSchedule(target);
-                                  setQuizTopic(target.today_topic || '');
-                                } else alert('Pilih jadwal bimbingan terlebih dahulu.');
-                              }}
-                              className="p-3.5 rounded-xl bg-slate-50 dark:bg-[#1c1f29] border border-slate-200/80 dark:border-transparent hover:border-purple-500 flex flex-col gap-1 text-left cursor-pointer transition-all"
-                            >
-                              <Icon name="quiz" className="text-purple-600 text-[22px]" />
-                              <span className="font-bold text-slate-900 dark:text-white mt-1">Kuis Kilat</span>
-                              <span className="text-[11px] text-slate-400">Diagnostik 5 soal</span>
-                            </button>
-
-                            <button
-                              onClick={() => {
-                                const target = myAssignedSchedules[0];
-                                if (target) {
-                                  setMaterialModalTarget(target);
-                                  setMaterialTitle('');
-                                } else alert('Pilih jadwal bimbingan terlebih dahulu.');
-                              }}
-                              className="p-3.5 rounded-xl bg-slate-50 dark:bg-[#1c1f29] border border-slate-200/80 dark:border-transparent hover:border-indigo-500 flex flex-col gap-1 text-left cursor-pointer transition-all"
-                            >
-                              <Icon name="picture_as_pdf" className="text-indigo-600 text-[22px]" />
-                              <span className="font-bold text-slate-900 dark:text-white mt-1">Modul PDF</span>
-                              <span className="text-[11px] text-slate-400">Ringkasan rumus</span>
-                            </button>
-
-                            <button
-                              onClick={() => {
-                                const target = myAssignedSchedules[0];
-                                if (target) {
-                                  setActiveReportSchedule(target);
-                                  setReportTopic(target.today_topic || '');
-                                } else alert('Pilih jadwal bimbingan terlebih dahulu.');
-                              }}
-                              className="p-3.5 rounded-xl bg-slate-50 dark:bg-[#1c1f29] border border-slate-200/80 dark:border-transparent hover:border-amber-500 flex flex-col gap-1 text-left cursor-pointer transition-all"
-                            >
-                              <Icon name="grade" className="text-amber-600 text-[22px]" />
-                              <span className="font-bold text-slate-900 dark:text-white mt-1">Input Rapor</span>
-                              <span className="text-[11px] text-slate-400">Nilai & catatan</span>
-                            </button>
-
-                            <button
-                              onClick={() => {
-                                const target = myAssignedSchedules[0];
-                                if (target) handleRequestSubstitute(target);
-                                else alert('Pilih jadwal bimbingan terlebih dahulu.');
-                              }}
-                              className="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900 flex flex-col gap-1 text-left cursor-pointer transition-all"
-                            >
-                              <Icon name="published_with_changes" className="text-rose-600 text-[22px]" />
-                              <span className="font-bold text-rose-700 dark:text-rose-400 mt-1">Copot / Ganti</span>
-                              <span className="text-[11px] text-rose-500">Izin pengganti</span>
-                            </button>
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-[#31353f] pb-3">
+                            <div className="flex items-center gap-2">
+                              <Icon name="table_chart" className="text-emerald-600 text-[22px]" />
+                              <h3 className="font-bold text-base text-slate-900 dark:text-white">Tabel Daftar Murid Bimbingan Saya</h3>
+                            </div>
+                            <span className="text-xs font-bold text-emerald-600 dark:text-[#4edea3] bg-emerald-50 dark:bg-emerald-950/40 px-3 py-1 rounded-full">
+                              Total: {myAssignedSchedules.length} Murid
+                            </span>
                           </div>
+
+                          {myAssignedSchedules.length === 0 ? (
+                            <div className="p-8 text-center text-xs text-slate-400">
+                              Belum ada murid bimbingan yang terdaftar pada akun Anda.
+                            </div>
+                          ) : (
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-left text-xs text-slate-700 dark:text-slate-300">
+                                <thead className="bg-slate-50 dark:bg-[#1c1f29] text-[11px] uppercase font-bold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-[#31353f]">
+                                  <tr>
+                                    <th className="p-3">Nama Siswa</th>
+                                    <th className="p-3">Mata Pelajaran</th>
+                                    <th className="p-3">Jadwal Les</th>
+                                    <th className="p-3">Pertemuan</th>
+                                    <th className="p-3">Lokasi / Peta</th>
+                                    <th className="p-3 text-center">Aksi Cepat</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100 dark:divide-[#31353f]">
+                                  {myAssignedSchedules.map((sch) => {
+                                    const mapLink = sch.maps_url || (sch.student_address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(sch.student_address)}` : 'https://maps.google.com');
+                                    return (
+                                      <tr key={sch.id} className="hover:bg-slate-50/60 dark:hover:bg-[#202533] transition-colors">
+                                        <td className="p-3 font-bold text-slate-900 dark:text-white">
+                                          {sch.student_name}
+                                          <span className="block text-[10px] text-slate-400 font-normal">WA: {sch.student_phone}</span>
+                                        </td>
+                                        <td className="p-3 font-medium text-emerald-600 dark:text-[#4edea3]">
+                                          {sch.today_topic || 'Bimbingan Belajar'}
+                                        </td>
+                                        <td className="p-3 font-semibold text-amber-600">
+                                          {sch.day_of_week} • {sch.session_time?.substring(0, 5)} WIB
+                                        </td>
+                                        <td className="p-3">
+                                          <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-[#4edea3] font-bold text-[10px]">
+                                            {sch.completed_sessions || 0} / {sch.target_sessions || 8} Sesi
+                                          </span>
+                                        </td>
+                                        <td className="p-3 max-w-[200px]">
+                                          <div className="truncate text-slate-500" title={sch.student_address}>
+                                            {sch.student_address || 'Alamat Siswa'}
+                                          </div>
+                                          <a
+                                            href={mapLink}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-[10px] text-sky-600 dark:text-sky-400 font-bold hover:underline inline-flex items-center gap-1 mt-0.5"
+                                          >
+                                            <Icon name="near_me" className="text-[12px] text-rose-500" /> Buka Google Maps
+                                          </a>
+                                        </td>
+                                        <td className="p-3">
+                                          <div className="flex items-center justify-center gap-1.5">
+                                            <button
+                                              onClick={() => setOnlineClassSchedule(sch)}
+                                              title="Kelas Online"
+                                              className="p-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 cursor-pointer"
+                                            >
+                                              <Icon name="video_camera_front" className="text-[16px]" />
+                                            </button>
+                                            <button
+                                              onClick={() => openChat(sch)}
+                                              title="Chat Siswa"
+                                              className="p-1.5 bg-slate-100 dark:bg-[#262a34] text-slate-700 dark:text-white rounded-lg hover:bg-slate-200 cursor-pointer"
+                                            >
+                                              <Icon name="chat" className="text-[16px]" />
+                                            </button>
+                                            <button
+                                              onClick={() => {
+                                                setActiveReportSchedule(sch);
+                                                setReportTopic(sch.today_topic || '');
+                                              }}
+                                              title="Input Rapor"
+                                              className="p-1.5 bg-slate-100 dark:bg-[#262a34] text-slate-700 dark:text-white rounded-lg hover:bg-slate-200 cursor-pointer"
+                                            >
+                                              <Icon name="grade" className="text-[16px] text-amber-500" />
+                                            </button>
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
                         </div>
                       </div>
 
-                      {/* Kolom 3: Bursa Jadwal Murid */}
-                      <div className="lg:col-span-3 space-y-6">
+                      {/* Bursa Jadwal Murid Samping */}
+                      <div className="lg:col-span-4 space-y-4">
                         <div className="p-6 rounded-2xl bg-white dark:bg-[#181b25] border border-slate-200 dark:border-[#31353f] shadow-xs space-y-4">
                           <div className="flex justify-between items-center text-xs">
                             <h3 className="font-bold text-sm">Bursa Jadwal Murid</h3>
@@ -1537,269 +1301,502 @@ export default function GuruDashboard() {
                           </div>
 
                           <div className="space-y-3 text-xs">
-                            {openVacancies.length === 0 && takenByOthers.length === 0 ? (
+                            {openVacancies.length === 0 ? (
                               <div className="p-4 rounded-xl bg-slate-50 dark:bg-[#1c1f29] text-center text-slate-400">
                                 Belum ada jadwal murid yang terdaftar.
                               </div>
                             ) : (
-                              <>
-                                {openVacancies.map((v) => {
-                                  const gMapsUrl = v.maps_url || (v.student_address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(v.student_address)}` : 'https://maps.google.com');
-                                  return (
-                                    <div key={v.id} className="p-4 rounded-xl bg-slate-50 dark:bg-[#1c1f29] space-y-2 border border-emerald-500/20">
-                                      <div className="flex justify-between items-start font-bold">
-                                        <span className="text-slate-900 dark:text-white">{v.student_name}</span>
-                                        <span className="text-emerald-600 font-extrabold">Rp 30k/sesi</span>
-                                      </div>
-                                      <p className="text-slate-600 dark:text-slate-300 font-semibold">{v.today_topic || 'Bimbingan Belajar'}</p>
-                                      <p className="text-slate-400">{v.day_of_week} • {v.session_time?.substring(0, 5)} WIB</p>
-                                      
-                                      <div className="flex items-center justify-between pt-1 border-t border-slate-200/40 dark:border-[#31353f]/40">
-                                        <span className="text-[11px] text-slate-400 truncate max-w-[140px]">{v.student_address}</span>
-                                        <a
-                                          href={gMapsUrl}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          className="text-[10px] text-sky-600 dark:text-sky-400 font-bold hover:underline shrink-0 inline-flex items-center gap-0.5"
-                                        >
-                                          <Icon name="map" className="text-[12px] text-rose-500" /> Cek Titik
-                                        </a>
-                                      </div>
-
-                                      <button
-                                        onClick={() => handleClaimSchedule(v)}
-                                        disabled={claimLoading === v.id || !tutorProfile?.is_approved}
-                                        className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow-xs cursor-pointer disabled:opacity-50 transition-all mt-1"
-                                      >
-                                        {claimLoading === v.id ? 'Memproses...' : 'Ambil Jadwal Ini'}
-                                      </button>
-                                    </div>
-                                  );
-                                })}
-
-                                {takenByOthers.map((t) => (
-                                  <div key={t.id} className="p-4 rounded-xl bg-slate-100/70 dark:bg-[#141720] space-y-2 border border-slate-200 dark:border-[#2a2e39] opacity-80">
+                              openVacancies.map((v) => {
+                                const gMapsUrl = v.maps_url || (v.student_address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(v.student_address)}` : 'https://maps.google.com');
+                                return (
+                                  <div key={v.id} className="p-4 rounded-xl bg-slate-50 dark:bg-[#1c1f29] space-y-2 border border-emerald-500/20">
                                     <div className="flex justify-between items-start font-bold">
-                                      <span className="text-slate-700 dark:text-slate-300">{t.student_name}</span>
-                                      <span className="px-2 py-0.5 rounded bg-slate-200 dark:bg-[#262a34] text-slate-600 dark:text-slate-400 text-[10px]">
-                                        Terisi
-                                      </span>
+                                      <span className="text-slate-900 dark:text-white">{v.student_name}</span>
+                                      <span className="text-emerald-600 font-extrabold">Rp 30k/sesi</span>
                                     </div>
-                                    <p className="text-slate-500 text-[11px]">{t.day_of_week} • {t.session_time?.substring(0, 5)} WIB</p>
+                                    <p className="text-slate-600 dark:text-slate-300 font-semibold">{v.today_topic || 'Bimbingan Belajar'}</p>
+                                    <p className="text-slate-400">{v.day_of_week} • {v.session_time?.substring(0, 5)} WIB</p>
                                     
-                                    <div className="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-900/40 text-[11px] text-amber-800 dark:text-amber-300 font-semibold flex items-center gap-1.5">
-                                      <Icon name="lock" className="text-[16px] text-amber-600 shrink-0" />
-                                      <span>Sudah diambil oleh <b>Kak {t.claimed_by_tutor_name}</b></span>
+                                    <div className="flex items-center justify-between pt-1 border-t border-slate-200/40 dark:border-[#31353f]/40">
+                                      <span className="text-[11px] text-slate-400 truncate max-w-[140px]">{v.student_address}</span>
+                                      <a
+                                        href={gMapsUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-[10px] text-sky-600 dark:text-sky-400 font-bold hover:underline shrink-0 inline-flex items-center gap-0.5"
+                                      >
+                                        <Icon name="map" className="text-[12px] text-rose-500" /> Cek Titik
+                                      </a>
                                     </div>
+
+                                    <button
+                                      onClick={() => handleClaimSchedule(v)}
+                                      disabled={claimLoading === v.id || !tutorProfile?.is_approved}
+                                      className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow-xs cursor-pointer disabled:opacity-50 transition-all mt-1"
+                                    >
+                                      {claimLoading === v.id ? 'Memproses...' : 'Ambil Jadwal Ini'}
+                                    </button>
                                   </div>
-                                ))}
-                              </>
+                                );
+                              })
                             )}
                           </div>
                         </div>
                       </div>
-
-                    </div>
-
-                    {/* TABEL DAFTAR SEMUA SISWA BIMBINGAN AKTIF */}
-                    <div className="p-6 rounded-2xl bg-white dark:bg-[#181b25] border border-slate-200 dark:border-[#31353f] shadow-xs space-y-4">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-[#31353f] pb-3">
-                        <div className="flex items-center gap-2">
-                          <Icon name="table_chart" className="text-emerald-600 text-[22px]" />
-                          <h3 className="font-bold text-base text-slate-900 dark:text-white">Tabel Daftar Murid Bimbingan Saya</h3>
-                        </div>
-                        <span className="text-xs font-bold text-emerald-600 dark:text-[#4edea3] bg-emerald-50 dark:bg-emerald-950/40 px-3 py-1 rounded-full">
-                          Total: {myAssignedSchedules.length} Murid
-                        </span>
-                      </div>
-
-                      {myAssignedSchedules.length === 0 ? (
-                        <div className="p-8 text-center text-xs text-slate-400">
-                          Belum ada murid bimbingan yang terdaftar pada akun Anda.
-                        </div>
-                      ) : (
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-left text-xs text-slate-700 dark:text-slate-300">
-                            <thead className="bg-slate-50 dark:bg-[#1c1f29] text-[11px] uppercase font-bold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-[#31353f]">
-                              <tr>
-                                <th className="p-3">Nama Siswa</th>
-                                <th className="p-3">Mata Pelajaran</th>
-                                <th className="p-3">Jadwal Les</th>
-                                <th className="p-3">Pertemuan</th>
-                                <th className="p-3">Lokasi / Peta</th>
-                                <th className="p-3 text-center">Aksi Cepat</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100 dark:divide-[#31353f]">
-                              {myAssignedSchedules.map((sch) => {
-                                const mapLink = sch.maps_url || (sch.student_address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(sch.student_address)}` : 'https://maps.google.com');
-                                return (
-                                  <tr key={sch.id} className="hover:bg-slate-50/60 dark:hover:bg-[#202533] transition-colors">
-                                    <td className="p-3 font-bold text-slate-900 dark:text-white">
-                                      {sch.student_name}
-                                      <span className="block text-[10px] text-slate-400 font-normal">WA: {sch.student_phone}</span>
-                                    </td>
-                                    <td className="p-3 font-medium text-emerald-600 dark:text-[#4edea3]">
-                                      {sch.today_topic || 'Bimbingan Belajar'}
-                                    </td>
-                                    <td className="p-3 font-semibold text-amber-600">
-                                      {sch.day_of_week} • {sch.session_time?.substring(0, 5)} WIB
-                                    </td>
-                                    <td className="p-3">
-                                      <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-[#4edea3] font-bold text-[10px]">
-                                        {sch.completed_sessions || 0} / {sch.target_sessions || 8} Sesi
-                                      </span>
-                                    </td>
-                                    <td className="p-3 max-w-[200px]">
-                                      <div className="truncate text-slate-500" title={sch.student_address}>
-                                        {sch.student_address || 'Alamat Siswa'}
-                                      </div>
-                                      <a
-                                        href={mapLink}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-[10px] text-sky-600 dark:text-sky-400 font-bold hover:underline inline-flex items-center gap-1 mt-0.5"
-                                      >
-                                        <Icon name="near_me" className="text-[12px] text-rose-500" /> Buka Google Maps
-                                      </a>
-                                    </td>
-                                    <td className="p-3">
-                                      <div className="flex items-center justify-center gap-1.5">
-                                        <button
-                                          onClick={() => setOnlineClassSchedule(sch)}
-                                          title="Kelas Online"
-                                          className="p-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 cursor-pointer"
-                                        >
-                                          <Icon name="video_camera_front" className="text-[16px]" />
-                                        </button>
-                                        <button
-                                          onClick={() => openChat(sch)}
-                                          title="Chat Siswa"
-                                          className="p-1.5 bg-slate-100 dark:bg-[#262a34] text-slate-700 dark:text-white rounded-lg hover:bg-slate-200 cursor-pointer"
-                                        >
-                                          <Icon name="chat" className="text-[16px]" />
-                                        </button>
-                                        <button
-                                          onClick={() => {
-                                            setActiveReportSchedule(sch);
-                                            setReportTopic(sch.today_topic || '');
-                                          }}
-                                          title="Input Rapor"
-                                          className="p-1.5 bg-slate-100 dark:bg-[#262a34] text-slate-700 dark:text-white rounded-lg hover:bg-slate-200 cursor-pointer"
-                                        >
-                                          <Icon name="grade" className="text-[16px] text-amber-500" />
-                                        </button>
-                                      </div>
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
                     </div>
                   </div>
                 )}
 
-                {/* TAB 2: JADWAL MENGAJAR */}
+                {/* TAB 2: JADWAL MENGAJAR & MANAJEMEN KBM (SESUAI DOKUMEN HTML REFERENSI) */}
                 {activeTab === 'jadwal' && (
                   <div className="space-y-6">
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <h1 className="text-2xl font-bold">Jadwal Mengajar & KBM</h1>
-                        <p className="text-xs text-slate-500 mt-0.5">Kelola agenda les privat tatap muka & online mingguan</p>
+                    {/* Top Control Bar / Command Horizon */}
+                    <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2.5 flex-wrap">
+                          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+                            Jadwal Mengajar &amp; Manajemen KBM
+                          </h1>
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-[#4edea3] text-xs font-semibold">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                            Auto-Sync Google Calendar &amp; HP Aktif
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          Kelola agenda les privat tatap muka dan sesi online mingguan {tutorProfile?.full_name || 'Tutor Cerdas'}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <div className="p-1 rounded-xl bg-slate-200/80 dark:bg-[#181b25] border border-slate-200 dark:border-[#31353f] flex items-center gap-1 text-xs">
+                          <button
+                            onClick={() => setScheduleFilterTab('mendatang')}
+                            className={`px-3.5 py-1.5 rounded-lg transition-all font-semibold cursor-pointer ${
+                              scheduleFilterTab === 'mendatang' ? 'bg-white dark:bg-[#262a34] text-slate-900 dark:text-white shadow-xs' : 'text-slate-600 dark:text-slate-400'
+                            }`}
+                          >
+                            Mendatang <span className="ml-1 text-emerald-600 font-bold">{myAssignedSchedules.length}</span>
+                          </button>
+                          <button
+                            onClick={() => setScheduleFilterTab('riwayat')}
+                            className={`px-3.5 py-1.5 rounded-lg transition-all font-semibold cursor-pointer ${
+                              scheduleFilterTab === 'riwayat' ? 'bg-white dark:bg-[#262a34] text-slate-900 dark:text-white shadow-xs' : 'text-slate-600 dark:text-slate-400'
+                            }`}
+                          >
+                            Riwayat Selesai <span className="ml-1 text-slate-400">{totalCompletedSessions}</span>
+                          </button>
+                          <button
+                            onClick={() => setScheduleFilterTab('izin')}
+                            className={`px-3.5 py-1.5 rounded-lg transition-all font-semibold cursor-pointer ${
+                              scheduleFilterTab === 'izin' ? 'bg-white dark:bg-[#262a34] text-slate-900 dark:text-white shadow-xs' : 'text-slate-600 dark:text-slate-400'
+                            }`}
+                          >
+                            Izin &amp; Ganti Jadwal
+                          </button>
+                        </div>
+
+                        <button
+                          onClick={() => alert('Jadwal les ditentukan langsung oleh murid atau diambil melalui Bursa Jadwal.')}
+                          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-all shadow-sm cursor-pointer"
+                        >
+                          <Icon name="add_circle" className="text-[18px]" />
+                          <span>Tambah Slot Mengajar</span>
+                        </button>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-7 gap-2 text-center">
-                      {DAYS_NAME.map((d, idx) => (
-                        <button
-                          key={idx}
-                          onClick={() => setActiveCalendarDay(d)}
-                          className={`p-3 rounded-xl border flex flex-col items-center justify-center transition-all cursor-pointer ${
-                            activeCalendarDay === d
-                              ? 'bg-emerald-600 text-white font-bold shadow-md'
-                              : 'bg-white dark:bg-[#181b25] border-slate-200 dark:border-[#31353f] text-slate-600 dark:text-slate-400'
-                          }`}
-                        >
-                          <span className="text-[10px] uppercase">{d}</span>
-                          <span className="text-base font-black mt-0.5">{16 + idx}</span>
-                        </button>
-                      ))}
-                    </div>
+                    {/* Main Workspace (65% Agenda / 35% Logistics & Dispatch) */}
+                    <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 w-full items-start">
+                      
+                      {/* LEFT WORKSPACE (65% -> 8 columns on 12-col grid) */}
+                      <div className="xl:col-span-8 flex flex-col gap-6">
+                        
+                        {/* Interactive Weekly Date Picker Strip */}
+                        <div className="p-4 rounded-2xl bg-white dark:bg-[#181b25] border border-slate-200 dark:border-[#31353f] flex flex-col gap-3 shadow-xs">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Icon name="calendar_month" className="text-emerald-600 text-[20px]" />
+                              <span className="font-bold text-sm text-slate-900 dark:text-white">Oktober 2026</span>
+                              <span className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold pl-1">Pekan ke-3</span>
+                            </div>
+                            <div className="flex items-center gap-1 text-xs">
+                              <button className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-[#262a34] hover:bg-slate-200 dark:hover:bg-[#31353f] flex items-center justify-center text-slate-600 dark:text-slate-300 transition-colors">
+                                <Icon name="chevron_left" className="text-[18px]" />
+                              </button>
+                              <button className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-[#262a34] hover:bg-slate-200 dark:hover:bg-[#31353f] text-slate-700 dark:text-slate-200 font-semibold transition-colors">
+                                Hari Ini
+                              </button>
+                              <button className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-[#262a34] hover:bg-slate-200 dark:hover:bg-[#31353f] flex items-center justify-center text-slate-600 dark:text-slate-300 transition-colors">
+                                <Icon name="chevron_right" className="text-[18px]" />
+                              </button>
+                            </div>
+                          </div>
 
-                    <div className="space-y-3">
-                      {myAssignedSchedules
-                        .filter((sch) => !activeCalendarDay || sch.day_of_week === activeCalendarDay)
-                        .map((sch) => {
-                          const gMapsRouteUrl = sch.maps_url || (sch.student_address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(sch.student_address)}` : 'https://maps.google.com');
-                          return (
-                            <div key={sch.id} className="p-5 rounded-2xl bg-white dark:bg-[#181b25] border border-slate-200 dark:border-[#31353f] shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <span className="text-xs font-bold text-amber-600">{sch.day_of_week} • {sch.session_time?.substring(0, 5)} WIB</span>
-                                  <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 text-[10px] font-bold">
-                                    {sch.completed_sessions || 0} / {sch.target_sessions || 8} Sesi
-                                  </span>
-                                </div>
-                                <h4 className="text-base font-bold mt-1">{sch.student_name}</h4>
-                                <p className="text-xs text-slate-500">{sch.today_topic || 'Bimbingan Belajar'}</p>
-                                <div className="flex items-center gap-2 mt-1">
-                                  <span className="text-xs text-slate-500 flex items-center gap-1 truncate">
-                                    <Icon name="home_pin" className="text-[14px] text-emerald-600 shrink-0" />
-                                    <span className="truncate">{sch.student_address}</span>
-                                  </span>
-                                  <a
-                                    href={gMapsRouteUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800 text-[10px] font-bold hover:bg-sky-100 shrink-0"
-                                  >
-                                    <Icon name="map" className="text-[12px] text-rose-500" />
-                                    <span>Rute Maps 🚗</span>
-                                  </a>
-                                </div>
+                          <div className="grid grid-cols-7 gap-2">
+                            {[
+                              { day: 'SEN', date: 16, active: false, dot: 'bg-slate-300' },
+                              { day: 'SEL', date: 17, active: true, dot: 'bg-white' },
+                              { day: 'RAB', date: 18, active: false, dot: 'bg-transparent' },
+                              { day: 'KAM', date: 19, active: false, dot: 'bg-amber-500' },
+                              { day: 'JUM', date: 20, active: false, dot: 'bg-emerald-500' },
+                              { day: 'SAB', date: 21, active: false, dot: 'bg-emerald-500' },
+                              { day: 'MIN', date: 22, active: false, dot: 'bg-transparent', off: true },
+                            ].map((item, idx) => (
+                              <button
+                                key={idx}
+                                onClick={() => setActiveCalendarDay(item.day.slice(0, 3) as any)}
+                                className={`flex flex-col items-center justify-center p-2.5 rounded-xl text-center transition-all cursor-pointer ${
+                                  item.active
+                                    ? 'bg-emerald-600 text-white shadow-md shadow-emerald-500/30'
+                                    : item.off
+                                    ? 'bg-slate-100/60 dark:bg-[#141720] text-slate-400 opacity-60'
+                                    : 'bg-slate-50 dark:bg-[#1c1f29] hover:bg-emerald-50/50 dark:hover:bg-[#202636] border border-slate-200/70 dark:border-[#31353f] text-slate-600 dark:text-slate-300'
+                                }`}
+                              >
+                                <span className={`text-[10px] font-bold ${item.active ? 'text-emerald-100' : 'text-slate-400'}`}>{item.day}</span>
+                                <span className="font-extrabold text-base">{item.date}</span>
+                                {item.off ? (
+                                  <span className="text-[9px] font-bold text-slate-400 mt-1">LIBUR</span>
+                                ) : (
+                                  <span className={`mt-1 w-1.5 h-1.5 rounded-full ${item.dot}`}></span>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* PRIORITY CARD: Sesi Hari Ini (Mulai dlm 45 Menit) */}
+                        {prioritySchedule ? (
+                          <div className="relative overflow-hidden rounded-2xl bg-white dark:bg-[#181b25] border border-slate-200 dark:border-[#31353f] shadow-xs space-y-4 p-6">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="flex items-center gap-2">
+                                <span className="px-2.5 py-1 rounded-full bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 text-xs font-semibold uppercase tracking-wider flex items-center gap-1.5">
+                                  <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
+                                  Prioritas Utama Hari Ini
+                                </span>
+                                <span className="px-2.5 py-1 rounded-full bg-slate-100 dark:bg-[#262a34] text-slate-600 dark:text-slate-300 text-xs font-medium">
+                                  Mulai dlm 45 Menit
+                                </span>
                               </div>
-
-                              <div className="flex gap-2 flex-wrap">
-                                <button
-                                  onClick={() => setOnlineClassSchedule(sch)}
-                                  className="px-3.5 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold flex items-center gap-1 hover:bg-emerald-700 cursor-pointer"
-                                >
-                                  <Icon name="video_camera_front" className="text-[16px]" /> Kelas Online
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    setActiveReportSchedule(sch);
-                                    setReportTopic(sch.today_topic || '');
-                                  }}
-                                  className="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-[#262a34] text-xs font-bold hover:bg-slate-200 cursor-pointer"
-                                >
-                                  Input Rapor
-                                </button>
-                                <button
-                                  onClick={() => openChat(sch)}
-                                  className="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-[#262a34] text-xs font-bold flex items-center gap-1 hover:bg-slate-200 cursor-pointer"
-                                >
-                                  <Icon name="chat" className="text-[16px]" /> Chat
-                                </button>
-                                <button
-                                  onClick={() => handleRequestSubstitute(sch)}
-                                  className="px-3.5 py-2 rounded-xl bg-rose-50 text-rose-600 text-xs font-bold hover:bg-rose-100 cursor-pointer"
-                                >
-                                  Izin Ganti
-                                </button>
+                              <div className="flex items-center gap-2 text-emerald-800 dark:text-emerald-300 text-xs bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-100 dark:border-emerald-800 px-3 py-1 rounded-lg font-semibold">
+                                <Icon name="payments" className="text-[16px] text-emerald-600" />
+                                <span>Honor: Rp 30.000 + Bonus Rp 10.000</span>
                               </div>
                             </div>
-                          );
-                        })}
 
-                      {myAssignedSchedules.filter((sch) => !activeCalendarDay || sch.day_of_week === activeCalendarDay).length === 0 && (
-                        <div className="p-8 text-center text-xs text-slate-400 bg-white dark:bg-[#181b25] rounded-2xl border border-slate-200 dark:border-[#31353f]">
-                          Tidak ada jadwal mengajar pada hari {activeCalendarDay}.
+                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                              <div className="flex items-start gap-4">
+                                <div className="relative flex-shrink-0">
+                                  <img
+                                    src={`https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(prioritySchedule.student_name)}&backgroundColor=b6e3f4`}
+                                    alt={prioritySchedule.student_name}
+                                    className="w-16 h-16 rounded-2xl object-cover border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800"
+                                  />
+                                  <span className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center text-[10px] font-bold shadow-xs">
+                                    8
+                                  </span>
+                                </div>
+                                <div className="flex flex-col">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-lg font-bold text-slate-900 dark:text-white">{prioritySchedule.student_name}</span>
+                                    <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-[#262a34] border border-slate-200 dark:border-slate-700 text-[11px] font-semibold text-slate-600 dark:text-slate-300">VIP Privat</span>
+                                  </div>
+                                  <span className="text-xs text-emerald-700 dark:text-[#4edea3] font-semibold mt-0.5">
+                                    {prioritySchedule.student_grade || 'Kelas 8 SMP MIPA Unggulan'} • SMP Labschool
+                                  </span>
+                                  <div className="flex items-center gap-3 mt-1.5 text-slate-500 dark:text-slate-400 text-xs flex-wrap">
+                                    <span className="inline-flex items-center gap-1">
+                                      <Icon name="schedule" className="text-[16px] text-amber-500" />
+                                      {prioritySchedule.session_time?.substring(0, 5) || '16:00'} - 17:30 WIB (90 Menit)
+                                    </span>
+                                    <span>•</span>
+                                    <span className="inline-flex items-center gap-1">
+                                      <Icon name="home_pin" className="text-[16px] text-emerald-600" />
+                                      Tatap Muka di Rumah Siswa
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Countdown Dial */}
+                              <div className="hidden sm:flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-[#1c1f29] border border-slate-200 dark:border-[#31353f] self-start md:self-auto">
+                                <div className="relative w-12 h-12">
+                                  <svg className="w-12 h-12 -rotate-90" viewBox="0 0 36 36">
+                                    <path className="text-slate-200 dark:text-slate-700" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" strokeWidth="3.5"></path>
+                                    <path className="text-amber-500" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" strokeDasharray="75, 100" strokeLinecap="round" strokeWidth="3.5"></path>
+                                  </svg>
+                                  <div className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-slate-800 dark:text-white">45m</div>
+                                </div>
+                                <div className="flex flex-col text-xs">
+                                  <span className="text-[10px] uppercase text-slate-400 font-bold">Check-In Terbuka</span>
+                                  <span className="font-semibold text-slate-800 dark:text-slate-200">Pukul 15:50 WIB</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Academic Target Block */}
+                            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-[#1c1f29] border border-slate-200/80 dark:border-[#31353f] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                              <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-100 dark:border-amber-900 flex items-center justify-center text-amber-600">
+                                  <Icon name="menu_book" className="text-[20px]" />
+                                </div>
+                                <div className="flex flex-col">
+                                  <span className="text-[11px] text-slate-400 uppercase tracking-wider font-bold">Materi Target Hari Ini</span>
+                                  <span className="text-xs font-bold text-slate-800 dark:text-white">
+                                    {prioritySchedule.today_topic || 'Persiapan UTS: Aljabar Lanjutan & Pemfaktoran Kuadrat'}
+                                  </span>
+                                </div>
+                              </div>
+                              <span className="px-2.5 py-1 rounded-md bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-[#4edea3] text-xs font-semibold">
+                                Modul Bab 4 Siap
+                              </span>
+                            </div>
+
+                            {/* Location preview details */}
+                            <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                              <Icon name="pin_drop" className="text-[16px] text-slate-400" />
+                              <span className="truncate">{prioritySchedule.student_address || 'Jl. Boulevard Raya Blok A4 No. 18, Kelapa Gading'} • Jarak 1.2 km dari posisi Anda</span>
+                            </div>
+
+                            {/* Primary CTA Row */}
+                            <div className="flex flex-wrap items-center gap-2 pt-1">
+                              <button
+                                onClick={() => handleStartSessionTimer(prioritySchedule)}
+                                className="flex-1 min-w-[200px] flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md transition-all cursor-pointer"
+                              >
+                                <Icon name="timer" className="text-[20px]" />
+                                <span>Mulai Sesi &amp; Stopwatch KBM</span>
+                              </button>
+                              <a
+                                href={prioritySchedule.maps_url || (prioritySchedule.student_address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(prioritySchedule.student_address)}` : 'https://maps.google.com')}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center justify-center gap-1.5 py-3 px-4 rounded-xl bg-white dark:bg-[#262a34] border border-slate-200 dark:border-[#31353f] hover:bg-slate-50 text-slate-700 dark:text-slate-200 text-xs font-semibold transition-all shadow-xs cursor-pointer"
+                              >
+                                <Icon name="directions" className="text-[18px] text-emerald-600" />
+                                <span>Buka Google Maps</span>
+                              </a>
+                              <button
+                                onClick={() => openChat(prioritySchedule)}
+                                className="flex items-center justify-center gap-1.5 py-3 px-4 rounded-xl bg-white dark:bg-[#262a34] border border-slate-200 dark:border-[#31353f] hover:bg-slate-50 text-slate-700 dark:text-slate-200 text-xs font-semibold transition-all shadow-xs cursor-pointer"
+                              >
+                                <Icon name="chat" className="text-[18px] text-amber-500" />
+                                <span>Chat Siswa / Ortu</span>
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="p-8 rounded-2xl bg-white dark:bg-[#181b25] border border-slate-200 dark:border-[#31353f] text-center text-xs text-slate-400">
+                            Tidak ada sesi bimbingan yang terjadwal untuk hari ini.
+                          </div>
+                        )}
+
+                        {/* Sesi Mendatang Pekan Ini (List Section) */}
+                        <div className="flex flex-col gap-3">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Icon name="upcoming" className="text-slate-400 text-[20px]" />
+                              <h2 className="font-bold text-sm text-slate-900 dark:text-white">Sesi Mendatang Pekan Ini</h2>
+                              <span className="px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-[#262a34] border border-slate-200 dark:border-[#31353f] text-slate-600 dark:text-slate-400 text-xs font-semibold">
+                                {myAssignedSchedules.length} Agenda Terkonfirmasi
+                              </span>
+                            </div>
+                            <button className="text-xs text-emerald-600 hover:text-emerald-700 font-semibold flex items-center gap-0.5 cursor-pointer">
+                              <span>Filter KBM</span>
+                              <Icon name="tune" className="text-[16px]" />
+                            </button>
+                          </div>
+
+                          {/* Cards List */}
+                          <div className="flex flex-col gap-2.5">
+                            {myAssignedSchedules.map((sch) => (
+                              <div
+                                key={sch.id}
+                                className="p-4 rounded-xl bg-white dark:bg-[#181b25] border border-slate-200 dark:border-[#31353f] hover:border-slate-300 transition-all flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-xs"
+                              >
+                                <div className="flex items-start gap-3.5">
+                                  <div className="w-12 h-12 rounded-xl bg-slate-50 dark:bg-[#1c1f29] border border-slate-200 dark:border-[#31353f] flex flex-col items-center justify-center flex-shrink-0 text-center">
+                                    <span className="text-[10px] text-slate-400 font-bold uppercase">{sch.day_of_week?.slice(0, 3) || 'SES'}</span>
+                                    <span className="font-extrabold text-base text-slate-900 dark:text-white leading-none">19</span>
+                                  </div>
+                                  <div className="flex flex-col text-xs">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="font-bold text-sm text-slate-900 dark:text-white">{sch.student_name}</span>
+                                      <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-[#262a34] border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-[11px] font-medium">
+                                        {sch.student_grade || 'Kelas 5 SD'}
+                                      </span>
+                                      <span className="px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-[#4edea3] text-[11px] font-semibold">
+                                        Tatap Muka
+                                      </span>
+                                    </div>
+                                    <span className="text-slate-600 dark:text-slate-400 mt-1">
+                                      {sch.session_time?.substring(0, 5) || '16:00'} WIB • {sch.today_topic || 'Matematika & IPA Kreatif'}
+                                    </span>
+                                    <div className="flex items-center gap-1 text-slate-400 text-[11px] mt-1">
+                                      <Icon name="location_on" className="text-[14px]" />
+                                      <span className="truncate max-w-sm">{sch.student_address || 'Kelapa Gading, Jakarta Utara'}</span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 self-end md:self-center">
+                                  <button
+                                    onClick={() => setOnlineClassSchedule(sch)}
+                                    className="px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-[#262a34] border border-slate-200 dark:border-[#31353f] text-slate-700 dark:text-slate-200 hover:bg-slate-100 text-xs font-semibold transition-colors cursor-pointer"
+                                  >
+                                    Detail Sesi
+                                  </button>
+                                  <button
+                                    onClick={() => handleRequestSubstitute(sch)}
+                                    className="px-3 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 hover:bg-amber-100 text-amber-700 dark:text-amber-400 text-xs font-semibold transition-colors cursor-pointer"
+                                  >
+                                    Reschedule
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                      )}
+
+                      </div>
+
+                      {/* RIGHT COLUMN (35% -> 4 columns on 12-col grid: Route, Availability & SOS Procedures) */}
+                      <div className="xl:col-span-4 flex flex-col gap-6">
+                        
+                        {/* Live GPS Navigation & Route Card */}
+                        <div className="rounded-2xl bg-white dark:bg-[#181b25] border border-slate-200 dark:border-[#31353f] overflow-hidden shadow-xs flex flex-col">
+                          <div className="relative h-48 w-full bg-slate-100 dark:bg-slate-900">
+                            <iframe
+                              title="Live Navigation Route Map"
+                              width="100%"
+                              height="100%"
+                              frameBorder="0"
+                              scrolling="no"
+                              src={`https://maps.google.com/maps?q=${encodeURIComponent(prioritySchedule?.student_address || 'Kelapa Gading Jakarta Utara')}&t=&z=14&ie=UTF8&iwloc=&output=embed`}
+                              className="w-full h-full filter contrast-105 pointer-events-none"
+                            />
+                            {/* Map Overlay floating badge */}
+                            <div className="absolute bottom-3 left-3 right-3 p-2.5 rounded-xl bg-white/95 dark:bg-[#181b25]/95 backdrop-blur-md border border-slate-200/80 dark:border-[#31353f] flex items-center justify-between shadow-md">
+                              <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-[#4edea3] flex items-center justify-center">
+                                  <Icon name="two_wheeler" className="text-[18px]" />
+                                </div>
+                                <div className="flex flex-col">
+                                  <span className="text-[10px] text-slate-400 uppercase font-bold">Rute Tercepat</span>
+                                  <span className="text-xs font-bold text-slate-800 dark:text-white">7 Menit • 1.2 km</span>
+                                </div>
+                              </div>
+                              <a
+                                href={prioritySchedule?.maps_url || (prioritySchedule?.student_address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(prioritySchedule.student_address)}` : 'https://maps.google.com')}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1 transition-colors shadow-xs"
+                              >
+                                <span>Navigasi</span>
+                                <Icon name="navigation" className="text-[14px]" />
+                              </a>
+                            </div>
+                          </div>
+
+                          <div className="p-4 flex flex-col gap-1 text-xs">
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-slate-900 dark:text-white">Tujuan: Rumah {prioritySchedule?.student_name || 'Raditya P.'}</span>
+                              <span className="text-emerald-700 dark:text-[#4edea3] font-semibold text-[11px]">Kondisi Jalan Lancar</span>
+                            </div>
+                            <span className="text-slate-500 dark:text-slate-400 truncate">
+                              {prioritySchedule?.student_address || 'Jl. Boulevard Raya Blok A4 No. 18, Kelapa Gading Barat'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Manajemen Ketersediaan Jam Mengajar */}
+                        <div className="p-4 rounded-2xl bg-white dark:bg-[#181b25] border border-slate-200 dark:border-[#31353f] flex flex-col gap-2 shadow-xs text-xs">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Icon name="tune" className="text-amber-500 text-[20px]" />
+                              <span className="font-bold text-sm text-slate-900 dark:text-white">Slot Tersedia</span>
+                            </div>
+                            <button
+                              onClick={() => alert('Jadwal jam mengajar otomatis sinkron dengan profil tutor.')}
+                              className="text-emerald-600 hover:underline font-semibold cursor-pointer"
+                            >
+                              Edit Jam
+                            </button>
+                          </div>
+                          <p className="text-slate-500 dark:text-slate-400 text-[11px] leading-relaxed">
+                            Waktu aktif dibuka otomatis untuk order privat murid baru &amp; booking mingguan:
+                          </p>
+                          <div className="flex flex-col gap-1.5 pt-1">
+                            <div className="p-2 rounded-lg bg-slate-50 dark:bg-[#1c1f29] border border-slate-200/70 dark:border-[#31353f] flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                <span className="font-semibold text-slate-800 dark:text-white">Senin - Kamis</span>
+                              </div>
+                              <span className="text-slate-600 dark:text-slate-400 font-medium">15:00 - 20:30 WIB</span>
+                            </div>
+                            <div className="p-2 rounded-lg bg-slate-50 dark:bg-[#1c1f29] border border-slate-200/70 dark:border-[#31353f] flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                <span className="font-semibold text-slate-800 dark:text-white">Jumat - Sabtu</span>
+                              </div>
+                              <span className="text-slate-600 dark:text-slate-400 font-medium">08:30 - 18:00 WIB</span>
+                            </div>
+                            <div className="p-2 rounded-lg bg-slate-50/60 dark:bg-[#1c1f29]/60 border border-dashed border-slate-200 dark:border-[#31353f] flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full bg-slate-300"></span>
+                                <span className="text-slate-400">Minggu</span>
+                              </div>
+                              <span className="text-slate-400">Istirahat / Off</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Prosedur Penggantian & Darurat KBM */}
+                        <div className="p-4 rounded-2xl bg-white dark:bg-[#181b25] border border-slate-200 dark:border-[#31353f] flex flex-col gap-2 shadow-xs text-xs">
+                          <div className="flex items-center gap-2 text-rose-600">
+                            <Icon name="assignment_late" className="text-[20px]" />
+                            <span className="font-bold text-sm text-slate-900 dark:text-white">Izin Sakit / Tutor Pengganti</span>
+                          </div>
+                          <p className="text-slate-500 dark:text-slate-400 leading-relaxed text-[11px]">
+                            Berhalangan hadir mendadak? Ajukan minimal <strong className="text-slate-800 dark:text-white font-semibold">H-4 jam</strong> sebelum sesi dimulai agar reputasi tutor tetap terjaga sempurna.
+                          </p>
+                          <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#1c1f29] border border-slate-200/80 dark:border-[#31353f] flex items-start gap-2.5">
+                            <Icon name="smart_toy" className="text-emerald-600 text-[20px] flex-shrink-0 mt-0.5" />
+                            <p className="text-slate-600 dark:text-slate-300 leading-relaxed text-[11px]">
+                              Sistem cerdas akan mencarikan tutor cadangan terakreditasi otomatis untuk menjaga retensi dan kenyamanan muridmu.
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => {
+                              const target = myAssignedSchedules[0];
+                              if (target) handleRequestSubstitute(target);
+                              else alert('Tidak ada jadwal aktif untuk diajukan izin.');
+                            }}
+                            className="w-full mt-1 py-2 px-4 rounded-xl bg-slate-50 dark:bg-[#262a34] hover:bg-slate-100 dark:hover:bg-[#31353f] border border-slate-200 dark:border-[#31353f] text-slate-700 dark:text-slate-200 font-semibold transition-colors text-center flex items-center justify-center gap-2 cursor-pointer"
+                          >
+                            <Icon name="edit_calendar" className="text-[16px] text-slate-500" />
+                            <span>Form Izin Cepat</span>
+                          </button>
+                        </div>
+
+                        {/* Performance & Discipline Scorecard */}
+                        <div className="p-4 rounded-2xl bg-white dark:bg-[#181b25] border border-slate-200 dark:border-[#31353f] flex items-center justify-between shadow-xs">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-[#4edea3]/20 border border-emerald-100 dark:border-transparent text-emerald-600 dark:text-[#4edea3] flex items-center justify-center">
+                              <Icon name="verified" className="text-[22px]" />
+                            </div>
+                            <div className="flex flex-col text-xs">
+                              <span className="font-bold text-slate-900 dark:text-white">{totalCompletedSessions} Sesi Selesai</span>
+                              <span className="text-emerald-600 dark:text-[#4edea3] font-semibold text-[11px]">100% Disiplin &amp; Tepat Waktu</span>
+                            </div>
+                          </div>
+                          <span className="px-2 py-1 rounded-md bg-slate-100 dark:bg-[#262a34] border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold">
+                            0 Ghosting
+                          </span>
+                        </div>
+
+                      </div>
+
                     </div>
                   </div>
                 )}
