@@ -17,7 +17,6 @@ const Icon = ({ name, fill = false, className = '' }: { name: string; fill?: boo
 
 const DAYS_NAME = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
 
-// Pilihan Avatar Animasi Bawaan
 const AVATAR_PRESETS = [
   { id: '1', name: 'Kucing Jenius', url: 'https://api.dicebear.com/7.x/bottts/svg?seed=Felix&backgroundColor=b6e3f4' },
   { id: '2', name: 'Rubah Cerdas', url: 'https://api.dicebear.com/7.x/bottts/svg?seed=Milo&backgroundColor=ffdfbf' },
@@ -198,7 +197,6 @@ export default function GuruDashboard() {
     return () => clearInterval(interval);
   }, []);
 
-  // 1. Logika Login dengan Kunci Verifikasi Kepala Sekolah
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!tutorPhone.trim() || !tutorPassword.trim()) {
@@ -318,7 +316,6 @@ export default function GuruDashboard() {
     setHomeworkHelpList([]);
   };
 
-  // Simpan Pembaruan Profil Guru (Akan langsung tayang di Dashboard Utama)
   const handleSaveProfileUpdates = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!tutorProfile) return;
@@ -340,8 +337,11 @@ export default function GuruDashboard() {
         finalAvatar = urlData.publicUrl;
       }
 
+      const newName = editFullName.trim();
+      const oldName = tutorProfile.full_name;
+
       const updatePayload = {
-        full_name: editFullName.trim(),
+        full_name: newName,
         campus: editCampus.trim(),
         major: editMajor.trim(),
         achievements: editAchievements.trim(),
@@ -357,10 +357,18 @@ export default function GuruDashboard() {
 
       if (error) throw error;
 
+      if (newName !== oldName) {
+        await supabase
+          .from('schedules')
+          .update({ claimed_by_tutor_name: newName })
+          .eq('claimed_by_tutor_name', oldName);
+      }
+
       setTutorProfile(data);
       confetti({ particleCount: 80, spread: 60 });
       alert('Profil berhasil diperbarui! Perubahan Anda kini langsung tayang di etalase beranda utama.');
       setShowEditProfileModal(false);
+      fetchTutorData(newName);
     } catch (err: any) {
       alert('Gagal memperbarui profil: ' + err.message);
     } finally {
@@ -818,7 +826,6 @@ export default function GuruDashboard() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // 1. Murid yang khusus dibimbing oleh guru ini (Login saat ini)
   const myAssignedSchedules = schedules.filter(
     (s) => (s.claimed_by_tutor_name?.toLowerCase() === tutorProfile?.full_name?.toLowerCase() || 
             s.substitute_tutor_name?.toLowerCase() === tutorProfile?.full_name?.toLowerCase()) 
@@ -830,12 +837,10 @@ export default function GuruDashboard() {
     (s) => s.is_substitute_needed && s.claimed_by_tutor_name !== tutorProfile?.full_name
   );
 
-  // 2. Bursa Jadwal Terbuka (HANYA yang belum diambil oleh siapa pun)
   const openVacancies = schedules.filter(
     (s) => (s.status === 'open' || !s.claimed_by_tutor_name) && !s.is_substitute_needed
   );
 
-  // 3. Jadwal yang SUDAH DIAMBIL oleh guru lain (Untuk notifikasi/informasi)
   const takenByOthers = schedules.filter(
     (s) => s.claimed_by_tutor_name && 
            s.claimed_by_tutor_name?.toLowerCase() !== tutorProfile?.full_name?.toLowerCase() &&
@@ -975,7 +980,9 @@ export default function GuruDashboard() {
               <Icon name="search" className="absolute left-3.5 text-slate-400 text-[20px]" />
               <input
                 type="text"
-                placeholder="Cari siswa, topik pelajaran, atau ID soal..."
+                value={studentSearchQuery}
+                onChange={(e) => setStudentSearchQuery(e.target.value)}
+                placeholder="Cari siswa, topik pelajaran, atau alamat..."
                 className="w-full h-10 pl-10 pr-12 rounded-xl bg-slate-50 dark:bg-[#181b25] border border-slate-200 dark:border-[#31353f] text-slate-800 dark:text-white placeholder:text-slate-400 text-xs focus:outline-none focus:border-emerald-500 focus:bg-white dark:focus:bg-[#1c1f29] transition-all"
               />
               <kbd className="absolute right-3 px-1.5 py-0.5 rounded bg-white dark:bg-[#262a34] border border-slate-200 dark:border-[#31353f] text-slate-400 text-[11px] font-bold">⌘K</kbd>
@@ -1001,14 +1008,6 @@ export default function GuruDashboard() {
                 {isReadyToTeach ? 'Siap Mengajar' : 'Mode Istirahat'}
               </span>
             </div>
-
-            <button
-              onClick={() => alert('Tidak ada notifikasi baru.')}
-              className="relative p-2 rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-[#262a34] transition-colors cursor-pointer"
-            >
-              <Icon name="notifications" className="text-[22px]" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white dark:ring-[#0a0e17]"></span>
-            </button>
 
             <div
               onClick={() => setActiveTab('profil')}
@@ -1113,7 +1112,6 @@ export default function GuruDashboard() {
                       </div>
 
                       <div className="flex items-center gap-2">
-                        {/* TOMBOL EDIT PROFIL PUBLIK GURU */}
                         <button
                           onClick={() => setShowEditProfileModal(true)}
                           className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
@@ -1146,7 +1144,17 @@ export default function GuruDashboard() {
                             <h3 className="font-bold text-base text-slate-900 dark:text-white mt-0.5">
                               {emergencySubstitutes[0].student_name} ({emergencySubstitutes[0].day_of_week} • {emergencySubstitutes[0].session_time?.substring(0, 5)} WIB)
                             </h3>
-                            <p className="text-xs text-slate-500 dark:text-[#bbcabf]">{emergencySubstitutes[0].student_address}</p>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <p className="text-xs text-slate-500 dark:text-[#bbcabf] truncate">{emergencySubstitutes[0].student_address}</p>
+                              <a
+                                href={emergencySubstitutes[0].maps_url || (emergencySubstitutes[0].student_address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(emergencySubstitutes[0].student_address)}` : 'https://maps.google.com')}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-[10px] text-sky-600 dark:text-sky-400 font-bold hover:underline shrink-0 inline-flex items-center gap-0.5"
+                              >
+                                <Icon name="map" className="text-[12px] text-rose-500" /> Cek Peta
+                              </a>
+                            </div>
                           </div>
                         </div>
                         <button
@@ -1208,8 +1216,10 @@ export default function GuruDashboard() {
                       </div>
                     </div>
 
-                    {/* Sesi KBM Aktif & Bursa Lowongan */}
+                    {/* Sesi KBM Aktif, Quick Tools & Bursa */}
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                      
+                      {/* Kolom 1: Sesi KBM Berjalan Hari Ini */}
                       <div className="lg:col-span-5 space-y-6">
                         {myAssignedSchedules.length === 0 ? (
                           <div className="p-6 bg-white dark:bg-[#181b25] rounded-2xl border border-slate-200 dark:border-[#31353f] text-center text-xs text-slate-400 space-y-2">
@@ -1221,6 +1231,7 @@ export default function GuruDashboard() {
                           myAssignedSchedules.slice(0, 1).map((sch) => {
                             const timerSec = activeTimers[sch.id] || 0;
                             const isTimerRunning = sch.is_timer_active && timerSec > 0;
+                            const googleMapsTargetUrl = sch.maps_url || (sch.student_address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(sch.student_address)}` : 'https://maps.google.com');
 
                             return (
                               <div key={sch.id} className="p-6 rounded-2xl bg-white dark:bg-[#181b25] border border-slate-200 dark:border-[#31353f] shadow-xs space-y-4">
@@ -1237,7 +1248,25 @@ export default function GuruDashboard() {
                                 <div>
                                   <h3 className="font-bold text-base">{sch.student_name}</h3>
                                   <p className="text-xs text-emerald-600 font-semibold">{sch.today_topic || 'Bimbingan Belajar'}</p>
-                                  <p className="text-xs text-slate-500 mt-0.5">{sch.student_address}</p>
+                                  
+                                  {/* ALAMAT LENGKAP & TOMBOL RUTE MAPS */}
+                                  <div className="mt-2 p-3 bg-slate-50 dark:bg-[#1c1f29] rounded-xl border border-slate-200/60 dark:border-[#31353f] space-y-1.5">
+                                    <div className="flex items-start justify-between gap-2">
+                                      <p className="text-xs text-slate-600 dark:text-slate-300 flex items-start gap-1">
+                                        <Icon name="home_pin" className="text-[16px] text-emerald-600 shrink-0 mt-0.5" />
+                                        <span className="leading-snug">{sch.student_address || 'Alamat Siswa'}</span>
+                                      </p>
+                                      <a
+                                        href={googleMapsTargetUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold shadow-xs transition-transform active:scale-95 shrink-0 cursor-pointer"
+                                      >
+                                        <Icon name="near_me" className="text-[15px]" />
+                                        <span>Rute Maps 🚗</span>
+                                      </a>
+                                    </div>
+                                  </div>
                                 </div>
 
                                 <button
@@ -1279,7 +1308,7 @@ export default function GuruDashboard() {
                         )}
                       </div>
 
-                      {/* 6 Quick Tools Guru */}
+                      {/* Kolom 2: Alat Manajemen Pembelajaran */}
                       <div className="lg:col-span-4 space-y-6">
                         <div className="p-6 rounded-2xl bg-white dark:bg-[#181b25] border border-slate-200 dark:border-[#31353f] shadow-xs space-y-4">
                           <h3 className="font-bold text-base">Alat Manajemen Pembelajaran</h3>
@@ -1375,7 +1404,7 @@ export default function GuruDashboard() {
                         </div>
                       </div>
 
-                      {/* BURSA JADWAL MURID & STATUS ALOKASI MURID */}
+                      {/* Kolom 3: Bursa Jadwal Murid */}
                       <div className="lg:col-span-3 space-y-6">
                         <div className="p-6 rounded-2xl bg-white dark:bg-[#181b25] border border-slate-200 dark:border-[#31353f] shadow-xs space-y-4">
                           <div className="flex justify-between items-center text-xs">
@@ -1390,24 +1419,39 @@ export default function GuruDashboard() {
                               </div>
                             ) : (
                               <>
-                                {openVacancies.map((v) => (
-                                  <div key={v.id} className="p-4 rounded-xl bg-slate-50 dark:bg-[#1c1f29] space-y-2 border border-emerald-500/20">
-                                    <div className="flex justify-between items-start font-bold">
-                                      <span className="text-slate-900 dark:text-white">{v.student_name}</span>
-                                      <span className="text-emerald-600 font-extrabold">Rp 30k/sesi</span>
+                                {openVacancies.map((v) => {
+                                  const gMapsUrl = v.maps_url || (v.student_address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(v.student_address)}` : 'https://maps.google.com');
+                                  return (
+                                    <div key={v.id} className="p-4 rounded-xl bg-slate-50 dark:bg-[#1c1f29] space-y-2 border border-emerald-500/20">
+                                      <div className="flex justify-between items-start font-bold">
+                                        <span className="text-slate-900 dark:text-white">{v.student_name}</span>
+                                        <span className="text-emerald-600 font-extrabold">Rp 30k/sesi</span>
+                                      </div>
+                                      <p className="text-slate-600 dark:text-slate-300 font-semibold">{v.today_topic || 'Bimbingan Belajar'}</p>
+                                      <p className="text-slate-400">{v.day_of_week} • {v.session_time?.substring(0, 5)} WIB</p>
+                                      
+                                      <div className="flex items-center justify-between pt-1 border-t border-slate-200/40 dark:border-[#31353f]/40">
+                                        <span className="text-[11px] text-slate-400 truncate max-w-[140px]">{v.student_address}</span>
+                                        <a
+                                          href={gMapsUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="text-[10px] text-sky-600 dark:text-sky-400 font-bold hover:underline shrink-0 inline-flex items-center gap-0.5"
+                                        >
+                                          <Icon name="map" className="text-[12px] text-rose-500" /> Cek Titik
+                                        </a>
+                                      </div>
+
+                                      <button
+                                        onClick={() => handleClaimSchedule(v)}
+                                        disabled={claimLoading === v.id || !tutorProfile?.is_approved}
+                                        className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow-xs cursor-pointer disabled:opacity-50 transition-all mt-1"
+                                      >
+                                        {claimLoading === v.id ? 'Memproses...' : 'Ambil Jadwal Ini'}
+                                      </button>
                                     </div>
-                                    <p className="text-slate-600 dark:text-slate-300 font-semibold">{v.today_topic || 'Bimbingan Belajar'}</p>
-                                    <p className="text-slate-400">{v.day_of_week} • {v.session_time?.substring(0, 5)} WIB</p>
-                                    <p className="text-[11px] text-slate-400 truncate">{v.student_address}</p>
-                                    <button
-                                      onClick={() => handleClaimSchedule(v)}
-                                      disabled={claimLoading === v.id || !tutorProfile?.is_approved}
-                                      className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow-xs cursor-pointer disabled:opacity-50 transition-all"
-                                    >
-                                      {claimLoading === v.id ? 'Memproses...' : 'Ambil Jadwal Ini'}
-                                    </button>
-                                  </div>
-                                ))}
+                                  );
+                                })}
 
                                 {takenByOthers.map((t) => (
                                   <div key={t.id} className="p-4 rounded-xl bg-slate-100/70 dark:bg-[#141720] space-y-2 border border-slate-200 dark:border-[#2a2e39] opacity-80">
@@ -1430,6 +1474,106 @@ export default function GuruDashboard() {
                           </div>
                         </div>
                       </div>
+
+                    </div>
+
+                    {/* TABEL DAFTAR SEMUA SISWA BIMBINGAN AKTIF */}
+                    <div className="p-6 rounded-2xl bg-white dark:bg-[#181b25] border border-slate-200 dark:border-[#31353f] shadow-xs space-y-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-[#31353f] pb-3">
+                        <div className="flex items-center gap-2">
+                          <Icon name="table_chart" className="text-emerald-600 text-[22px]" />
+                          <h3 className="font-bold text-base text-slate-900 dark:text-white">Tabel Daftar Murid Bimbingan Saya</h3>
+                        </div>
+                        <span className="text-xs font-bold text-emerald-600 dark:text-[#4edea3] bg-emerald-50 dark:bg-emerald-950/40 px-3 py-1 rounded-full">
+                          Total: {myAssignedSchedules.length} Murid
+                        </span>
+                      </div>
+
+                      {myAssignedSchedules.length === 0 ? (
+                        <div className="p-8 text-center text-xs text-slate-400">
+                          Belum ada murid bimbingan yang terdaftar pada akun Anda.
+                        </div>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-xs text-slate-700 dark:text-slate-300">
+                            <thead className="bg-slate-50 dark:bg-[#1c1f29] text-[11px] uppercase font-bold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-[#31353f]">
+                              <tr>
+                                <th className="p-3">Nama Siswa</th>
+                                <th className="p-3">Mata Pelajaran</th>
+                                <th className="p-3">Jadwal Les</th>
+                                <th className="p-3">Pertemuan</th>
+                                <th className="p-3">Lokasi / Peta</th>
+                                <th className="p-3 text-center">Aksi Cepat</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 dark:divide-[#31353f]">
+                              {myAssignedSchedules.map((sch) => {
+                                const mapLink = sch.maps_url || (sch.student_address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(sch.student_address)}` : 'https://maps.google.com');
+                                return (
+                                  <tr key={sch.id} className="hover:bg-slate-50/60 dark:hover:bg-[#202533] transition-colors">
+                                    <td className="p-3 font-bold text-slate-900 dark:text-white">
+                                      {sch.student_name}
+                                      <span className="block text-[10px] text-slate-400 font-normal">WA: {sch.student_phone}</span>
+                                    </td>
+                                    <td className="p-3 font-medium text-emerald-600 dark:text-[#4edea3]">
+                                      {sch.today_topic || 'Bimbingan Belajar'}
+                                    </td>
+                                    <td className="p-3 font-semibold text-amber-600">
+                                      {sch.day_of_week} • {sch.session_time?.substring(0, 5)} WIB
+                                    </td>
+                                    <td className="p-3">
+                                      <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-[#4edea3] font-bold text-[10px]">
+                                        {sch.completed_sessions || 0} / {sch.target_sessions || 8} Sesi
+                                      </span>
+                                    </td>
+                                    <td className="p-3 max-w-[200px]">
+                                      <div className="truncate text-slate-500" title={sch.student_address}>
+                                        {sch.student_address || 'Alamat Siswa'}
+                                      </div>
+                                      <a
+                                        href={mapLink}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-[10px] text-sky-600 dark:text-sky-400 font-bold hover:underline inline-flex items-center gap-1 mt-0.5"
+                                      >
+                                        <Icon name="near_me" className="text-[12px] text-rose-500" /> Buka Google Maps
+                                      </a>
+                                    </td>
+                                    <td className="p-3">
+                                      <div className="flex items-center justify-center gap-1.5">
+                                        <button
+                                          onClick={() => setOnlineClassSchedule(sch)}
+                                          title="Kelas Online"
+                                          className="p-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 cursor-pointer"
+                                        >
+                                          <Icon name="video_camera_front" className="text-[16px]" />
+                                        </button>
+                                        <button
+                                          onClick={() => openChat(sch)}
+                                          title="Chat Siswa"
+                                          className="p-1.5 bg-slate-100 dark:bg-[#262a34] text-slate-700 dark:text-white rounded-lg hover:bg-slate-200 cursor-pointer"
+                                        >
+                                          <Icon name="chat" className="text-[16px]" />
+                                        </button>
+                                        <button
+                                          onClick={() => {
+                                            setActiveReportSchedule(sch);
+                                            setReportTopic(sch.today_topic || '');
+                                          }}
+                                          title="Input Rapor"
+                                          className="p-1.5 bg-slate-100 dark:bg-[#262a34] text-slate-700 dark:text-white rounded-lg hover:bg-slate-200 cursor-pointer"
+                                        >
+                                          <Icon name="grade" className="text-[16px] text-amber-500" />
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1464,50 +1608,68 @@ export default function GuruDashboard() {
                     <div className="space-y-3">
                       {myAssignedSchedules
                         .filter((sch) => !activeCalendarDay || sch.day_of_week === activeCalendarDay)
-                        .map((sch) => (
-                          <div key={sch.id} className="p-5 rounded-2xl bg-white dark:bg-[#181b25] border border-slate-200 dark:border-[#31353f] shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs font-bold text-amber-600">{sch.day_of_week} • {sch.session_time?.substring(0, 5)} WIB</span>
-                                <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 text-[10px] font-bold">
-                                  {sch.completed_sessions || 0} / {sch.target_sessions || 8} Sesi
-                                </span>
+                        .map((sch) => {
+                          const gMapsRouteUrl = sch.maps_url || (sch.student_address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(sch.student_address)}` : 'https://maps.google.com');
+                          return (
+                            <div key={sch.id} className="p-5 rounded-2xl bg-white dark:bg-[#181b25] border border-slate-200 dark:border-[#31353f] shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-bold text-amber-600">{sch.day_of_week} • {sch.session_time?.substring(0, 5)} WIB</span>
+                                  <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 text-[10px] font-bold">
+                                    {sch.completed_sessions || 0} / {sch.target_sessions || 8} Sesi
+                                  </span>
+                                </div>
+                                <h4 className="text-base font-bold mt-1">{sch.student_name}</h4>
+                                <p className="text-xs text-slate-500">{sch.today_topic || 'Bimbingan Belajar'}</p>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <span className="text-xs text-slate-500 flex items-center gap-1 truncate">
+                                    <Icon name="home_pin" className="text-[14px] text-emerald-600 shrink-0" />
+                                    <span className="truncate">{sch.student_address}</span>
+                                  </span>
+                                  <a
+                                    href={gMapsRouteUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800 text-[10px] font-bold hover:bg-sky-100 shrink-0"
+                                  >
+                                    <Icon name="map" className="text-[12px] text-rose-500" />
+                                    <span>Rute Maps 🚗</span>
+                                  </a>
+                                </div>
                               </div>
-                              <h4 className="text-base font-bold mt-1">{sch.student_name}</h4>
-                              <p className="text-xs text-slate-500">{sch.today_topic || 'Bimbingan Belajar'} • {sch.student_address}</p>
-                            </div>
 
-                            <div className="flex gap-2 flex-wrap">
-                              <button
-                                onClick={() => setOnlineClassSchedule(sch)}
-                                className="px-3.5 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold flex items-center gap-1 hover:bg-emerald-700 cursor-pointer"
-                              >
-                                <Icon name="video_camera_front" className="text-[16px]" /> Kelas Online
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setActiveReportSchedule(sch);
-                                  setReportTopic(sch.today_topic || '');
-                                }}
-                                className="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-[#262a34] text-xs font-bold hover:bg-slate-200 cursor-pointer"
-                              >
-                                Input Rapor
-                              </button>
-                              <button
-                                onClick={() => openChat(sch)}
-                                className="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-[#262a34] text-xs font-bold flex items-center gap-1 hover:bg-slate-200 cursor-pointer"
-                              >
-                                <Icon name="chat" className="text-[16px]" /> Chat
-                              </button>
-                              <button
-                                onClick={() => handleRequestSubstitute(sch)}
-                                className="px-3.5 py-2 rounded-xl bg-rose-50 text-rose-600 text-xs font-bold hover:bg-rose-100 cursor-pointer"
-                              >
-                                Izin Ganti
-                              </button>
+                              <div className="flex gap-2 flex-wrap">
+                                <button
+                                  onClick={() => setOnlineClassSchedule(sch)}
+                                  className="px-3.5 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold flex items-center gap-1 hover:bg-emerald-700 cursor-pointer"
+                                >
+                                  <Icon name="video_camera_front" className="text-[16px]" /> Kelas Online
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setActiveReportSchedule(sch);
+                                    setReportTopic(sch.today_topic || '');
+                                  }}
+                                  className="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-[#262a34] text-xs font-bold hover:bg-slate-200 cursor-pointer"
+                                >
+                                  Input Rapor
+                                </button>
+                                <button
+                                  onClick={() => openChat(sch)}
+                                  className="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-[#262a34] text-xs font-bold flex items-center gap-1 hover:bg-slate-200 cursor-pointer"
+                                >
+                                  <Icon name="chat" className="text-[16px]" /> Chat
+                                </button>
+                                <button
+                                  onClick={() => handleRequestSubstitute(sch)}
+                                  className="px-3.5 py-2 rounded-xl bg-rose-50 text-rose-600 text-xs font-bold hover:bg-rose-100 cursor-pointer"
+                                >
+                                  Izin Ganti
+                                </button>
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
 
                       {myAssignedSchedules.filter((sch) => !activeCalendarDay || sch.day_of_week === activeCalendarDay).length === 0 && (
                         <div className="p-8 text-center text-xs text-slate-400 bg-white dark:bg-[#181b25] rounded-2xl border border-slate-200 dark:border-[#31353f]">
@@ -1544,52 +1706,70 @@ export default function GuruDashboard() {
                     </div>
 
                     <div className="space-y-4">
-                      {filteredStudents.map((sch) => (
-                        <div key={sch.id} className="p-5 rounded-2xl bg-white dark:bg-[#181b25] border border-slate-200 dark:border-[#31353f] shadow-xs space-y-3">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <h3 className="font-bold text-base">{sch.student_name}</h3>
-                              <p className="text-xs text-slate-500">{sch.student_grade || 'Kelas Belajar'} • WA: {sch.student_phone}</p>
+                      {filteredStudents.map((sch) => {
+                        const directMapUrl = sch.maps_url || (sch.student_address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(sch.student_address)}` : 'https://maps.google.com');
+                        return (
+                          <div key={sch.id} className="p-5 rounded-2xl bg-white dark:bg-[#181b25] border border-slate-200 dark:border-[#31353f] shadow-xs space-y-3">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <h3 className="font-bold text-base">{sch.student_name}</h3>
+                                <p className="text-xs text-slate-500">{sch.student_grade || 'Kelas Belajar'} • WA: {sch.student_phone}</p>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <span className="text-xs text-slate-500 flex items-center gap-1 truncate">
+                                    <Icon name="home_pin" className="text-[14px] text-emerald-600 shrink-0" />
+                                    <span className="truncate">{sch.student_address || 'Alamat KBM'}</span>
+                                  </span>
+                                  <a
+                                    href={directMapUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800 text-[10px] font-bold hover:bg-sky-100 shrink-0"
+                                  >
+                                    <Icon name="near_me" className="text-[12px] text-rose-500" />
+                                    <span>Buka Rute Maps 🚗</span>
+                                  </a>
+                                </div>
+                              </div>
+                              <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full shrink-0">
+                                {sch.completed_sessions || 0} Pertemuan Selesai
+                              </span>
                             </div>
-                            <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full">
-                              {sch.completed_sessions || 0} Pertemuan Selesai
-                            </span>
-                          </div>
 
-                          <div className="flex gap-2 flex-wrap pt-2 border-t border-slate-100 dark:border-[#31353f]">
-                            <button
-                              onClick={() => setOnlineClassSchedule(sch)}
-                              className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-bold flex items-center gap-1 hover:bg-emerald-700 cursor-pointer"
-                            >
-                              <Icon name="video_camera_front" className="text-[16px]" /> Kelas Online
-                            </button>
-                            <button
-                              onClick={() => setActiveAssignmentSchedule(sch)}
-                              className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-[#262a34] text-xs font-bold flex items-center gap-1 hover:bg-slate-200 cursor-pointer"
-                            >
-                              <Icon name="assignment" className="text-[16px] text-cyan-500" /> Beri Tugas
-                            </button>
-                            <button
-                              onClick={() => setActiveGoalSchedule(sch)}
-                              className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-[#262a34] text-xs font-bold flex items-center gap-1 hover:bg-slate-200 cursor-pointer"
-                            >
-                              <Icon name="track_changes" className="text-[16px] text-emerald-500" /> Target
-                            </button>
-                            <button
-                              onClick={() => setActiveQuizSchedule(sch)}
-                              className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-[#262a34] text-xs font-bold flex items-center gap-1 hover:bg-slate-200 cursor-pointer"
-                            >
-                              <Icon name="quiz" className="text-[16px] text-purple-500" /> Kuis
-                            </button>
-                            <button
-                              onClick={() => { setMaterialModalTarget(sch); setMaterialTitle(''); setMaterialFile(null); }}
-                              className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-[#262a34] text-xs font-bold flex items-center gap-1 hover:bg-slate-200 cursor-pointer"
-                            >
-                              <Icon name="upload" className="text-[16px] text-indigo-500" /> Upload Modul
-                            </button>
+                            <div className="flex gap-2 flex-wrap pt-2 border-t border-slate-100 dark:border-[#31353f]">
+                              <button
+                                onClick={() => setOnlineClassSchedule(sch)}
+                                className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-bold flex items-center gap-1 hover:bg-emerald-700 cursor-pointer"
+                              >
+                                <Icon name="video_camera_front" className="text-[16px]" /> Kelas Online
+                              </button>
+                              <button
+                                onClick={() => setActiveAssignmentSchedule(sch)}
+                                className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-[#262a34] text-xs font-bold flex items-center gap-1 hover:bg-slate-200 cursor-pointer"
+                              >
+                                <Icon name="assignment" className="text-[16px] text-cyan-500" /> Beri Tugas
+                              </button>
+                              <button
+                                onClick={() => setActiveGoalSchedule(sch)}
+                                className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-[#262a34] text-xs font-bold flex items-center gap-1 hover:bg-slate-200 cursor-pointer"
+                              >
+                                <Icon name="track_changes" className="text-[16px] text-emerald-500" /> Target
+                              </button>
+                              <button
+                                onClick={() => setActiveQuizSchedule(sch)}
+                                className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-[#262a34] text-xs font-bold flex items-center gap-1 hover:bg-slate-200 cursor-pointer"
+                              >
+                                <Icon name="quiz" className="text-[16px] text-purple-500" /> Kuis
+                              </button>
+                              <button
+                                onClick={() => { setMaterialModalTarget(sch); setMaterialTitle(''); setMaterialFile(null); }}
+                                className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-[#262a34] text-xs font-bold flex items-center gap-1 hover:bg-slate-200 cursor-pointer"
+                              >
+                                <Icon name="upload" className="text-[16px] text-indigo-500" /> Upload Modul
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -1778,7 +1958,6 @@ export default function GuruDashboard() {
                 </div>
 
                 <form onSubmit={handleSaveProfileUpdates} className="space-y-3.5">
-                  {/* Pilihan Avatar / Foto Profil */}
                   <div className="p-3.5 bg-slate-50 dark:bg-[#1c1f29] rounded-2xl border border-slate-200/80 dark:border-transparent space-y-2.5">
                     <div className="flex justify-between items-center">
                       <label className="font-bold text-slate-800 dark:text-white">Tampilan Foto / Avatar</label>
