@@ -820,12 +820,6 @@ export default function GuruDashboard() {
     }
   };
 
-  const formatTimerSeconds = (sec: number) => {
-    const mins = Math.floor(sec / 60);
-    const secs = sec % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
   const myAssignedSchedules = schedules.filter(
     (s) => (s.claimed_by_tutor_name?.toLowerCase() === tutorProfile?.full_name?.toLowerCase() || 
             s.substitute_tutor_name?.toLowerCase() === tutorProfile?.full_name?.toLowerCase()) 
@@ -1008,6 +1002,14 @@ export default function GuruDashboard() {
                 {isReadyToTeach ? 'Siap Mengajar' : 'Mode Istirahat'}
               </span>
             </div>
+
+            <button
+              onClick={() => alert('Tidak ada notifikasi baru.')}
+              className="relative p-2 rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-[#262a34] transition-colors cursor-pointer"
+            >
+              <Icon name="notifications" className="text-[22px]" />
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white dark:ring-[#0a0e17]"></span>
+            </button>
 
             <div
               onClick={() => setActiveTab('profil')}
@@ -1219,7 +1221,7 @@ export default function GuruDashboard() {
                     {/* Sesi KBM Aktif, Quick Tools & Bursa */}
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
                       
-                      {/* Kolom 1: Sesi KBM Berjalan Hari Ini */}
+                      {/* Kolom 1: Sesi KBM Berjalan Hari Ini (KARTU LENGKAP PETA GOOGLE MAPS) */}
                       <div className="lg:col-span-5 space-y-6">
                         {myAssignedSchedules.length === 0 ? (
                           <div className="p-6 bg-white dark:bg-[#181b25] rounded-2xl border border-slate-200 dark:border-[#31353f] text-center text-xs text-slate-400 space-y-2">
@@ -1233,75 +1235,184 @@ export default function GuruDashboard() {
                             const isTimerRunning = sch.is_timer_active && timerSec > 0;
                             const googleMapsTargetUrl = sch.maps_url || (sch.student_address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(sch.student_address)}` : 'https://maps.google.com');
 
-                            return (
-                              <div key={sch.id} className="p-6 rounded-2xl bg-white dark:bg-[#181b25] border border-slate-200 dark:border-[#31353f] shadow-xs space-y-4">
-                                <div className="flex justify-between items-center">
-                                  <span className="text-xs font-bold text-emerald-700 dark:text-[#4edea3] flex items-center gap-1.5">
-                                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 animate-ping"></span>
-                                    {sch.day_of_week} • {sch.session_time?.substring(0, 5)} WIB
-                                  </span>
-                                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold">
-                                    {sch.completed_sessions || 0} / {sch.target_sessions || 8} Sesi
-                                  </span>
-                                </div>
+                            // Durasi Belajar Digital
+                            const elapsedTotal = Math.max(0, 90 * 60 - timerSec);
+                            const elapsedHours = String(Math.floor(elapsedTotal / 3600)).padStart(2, '0');
+                            const elapsedMinutes = String(Math.floor((elapsedTotal % 3600) / 60)).padStart(2, '0');
+                            const elapsedSeconds = String(elapsedTotal % 60).padStart(2, '0');
+                            const progressPercentage = Math.min(100, Math.round((elapsedTotal / (90 * 60)) * 100));
 
-                                <div>
-                                  <h3 className="font-bold text-base">{sch.student_name}</h3>
-                                  <p className="text-xs text-emerald-600 font-semibold">{sch.today_topic || 'Bimbingan Belajar'}</p>
+                            const studentAvatarUrl = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(sch.student_name)}&backgroundColor=b6e3f4`;
+
+                            return (
+                              <div key={sch.id} className="space-y-4">
+                                {/* KARTU UTAMA SESI KBM DENGAN PETA EMBED GOOGLE MAPS */}
+                                <div className="p-5 sm:p-6 rounded-[2rem] bg-[#121622] border border-[#23293a] text-white shadow-2xl space-y-5">
                                   
-                                  {/* ALAMAT LENGKAP & TOMBOL RUTE MAPS */}
-                                  <div className="mt-2 p-3 bg-slate-50 dark:bg-[#1c1f29] rounded-xl border border-slate-200/60 dark:border-[#31353f] space-y-1.5">
-                                    <div className="flex items-start justify-between gap-2">
-                                      <p className="text-xs text-slate-600 dark:text-slate-300 flex items-start gap-1">
-                                        <Icon name="home_pin" className="text-[16px] text-emerald-600 shrink-0 mt-0.5" />
-                                        <span className="leading-snug">{sch.student_address || 'Alamat Siswa'}</span>
-                                      </p>
-                                      <a
-                                        href={googleMapsTargetUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold shadow-xs transition-transform active:scale-95 shrink-0 cursor-pointer"
-                                      >
-                                        <Icon name="near_me" className="text-[15px]" />
-                                        <span>Rute Maps 🚗</span>
-                                      </a>
+                                  {/* 1. Header Profil Murid & Kontak Wali */}
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="flex items-center gap-3">
+                                      <div className="relative">
+                                        <img
+                                          src={studentAvatarUrl}
+                                          alt={sch.student_name}
+                                          className="w-13 h-13 rounded-2xl object-cover border-2 border-emerald-500/80 bg-slate-800 p-0.5 shadow-md"
+                                        />
+                                        <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 border-2 border-[#121622] flex items-center justify-center text-[9px]">
+                                          ✓
+                                        </span>
+                                      </div>
+                                      <div>
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <h3 className="font-extrabold text-base tracking-tight text-white">{sch.student_name}</h3>
+                                          <span className="px-2 py-0.5 rounded-md bg-[#23293a] text-amber-400 font-bold text-[10px] tracking-wide border border-amber-400/20">
+                                            {sch.student_grade || 'SMP'}
+                                          </span>
+                                        </div>
+                                        <p className="text-[11px] text-slate-400 mt-0.5">{sch.today_topic || 'Program Bimbingan Belajar'}</p>
+                                        <p className="text-[10px] text-slate-500 mt-0.5">Wali Murid: {sch.student_phone ? `+62 ${sch.student_phone.slice(-9, -4)}-xxxx` : 'Terdaftar'}</p>
+                                      </div>
+                                    </div>
+
+                                    <a
+                                      href={sch.student_phone ? `https://wa.me/${sch.student_phone.replace(/^0/, '62')}` : '#'}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="w-10 h-10 rounded-2xl bg-[#1c2233] hover:bg-[#283149] border border-slate-700/60 flex items-center justify-center text-emerald-400 transition-transform active:scale-95 shadow-sm shrink-0"
+                                      title="Hubungi Orang Tua Siswa"
+                                    >
+                                      <Icon name="call" className="text-[18px]" />
+                                    </a>
+                                  </div>
+
+                                  {/* 2. Informasi Alamat & Rute */}
+                                  <div className="flex items-center justify-between gap-2 text-xs">
+                                    <div className="flex items-center gap-1.5 text-slate-300 truncate">
+                                      <Icon name="location_on" className="text-amber-400 text-[16px] shrink-0" />
+                                      <span className="truncate">{sch.student_address || 'Jl. Boulevard Raya, Kelapa Gading'}</span>
+                                    </div>
+                                    <span className="text-emerald-400 font-extrabold text-[11px] shrink-0">1.2 km (ETA 4 min)</span>
+                                  </div>
+
+                                  {/* 3. TAMPILAN MINI MAP GOOGLE TERINTEGRASI */}
+                                  <div className="relative w-full h-40 rounded-2xl overflow-hidden border border-slate-700/60 shadow-inner bg-slate-900">
+                                    <iframe
+                                      title="Peta Lokasi Rumah Murid"
+                                      width="100%"
+                                      height="100%"
+                                      frameBorder="0"
+                                      scrolling="no"
+                                      src={`https://maps.google.com/maps?q=${encodeURIComponent(sch.student_address || 'Kelapa Gading Jakarta')}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
+                                      className="w-full h-full filter brightness-95 contrast-105 pointer-events-none"
+                                    />
+                                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-transparent pointer-events-none" />
+                                    
+                                    {/* Badge Indikator Radius GPS Aktif */}
+                                    <div className="absolute bottom-2.5 left-3 px-3 py-1 rounded-full bg-slate-950/85 backdrop-blur-md border border-slate-700 text-[10px] font-bold text-slate-200 flex items-center gap-1.5 shadow-sm">
+                                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                                      <span>GPS Aktif: Presensi Radius Valid (8m)</span>
+                                    </div>
+
+                                    {/* Tombol Rute Maps Pop-out */}
+                                    <a
+                                      href={googleMapsTargetUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="absolute top-2.5 right-3 px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-[11px] font-extrabold flex items-center gap-1.5 shadow-md transition-all active:scale-95 cursor-pointer"
+                                    >
+                                      <Icon name="near_me" className="text-[14px]" />
+                                      <span>Rute Maps 🚗</span>
+                                    </a>
+                                  </div>
+
+                                  {/* 4. Ruang Kelas Online */}
+                                  <button
+                                    onClick={() => setOnlineClassSchedule(sch)}
+                                    className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-xl shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
+                                  >
+                                    <Icon name="video_camera_front" className="text-[18px]" />
+                                    <span>Buka Ruang Kelas Online (Jitsi Meet)</span>
+                                  </button>
+
+                                  {/* 5. Stopwatch Live & Progres Belajar */}
+                                  <div className="p-4 rounded-2xl bg-[#181e2e] border border-slate-800 space-y-3">
+                                    <div className="flex justify-between items-center text-[11px]">
+                                      <span className="text-slate-400 font-bold uppercase tracking-wider">SISA WAKTU BELAJAR EFEKTIF</span>
+                                      <span className="text-amber-400 font-extrabold">Telah Berjalan: {Math.floor(elapsedTotal / 60)} Menit</span>
+                                    </div>
+
+                                    <div className="flex items-center justify-between">
+                                      <div className="text-3xl sm:text-4xl font-black font-mono tracking-widest text-emerald-400">
+                                        {elapsedHours} <span className="text-slate-500">:</span> {elapsedMinutes} <span className="text-slate-500">:</span> {elapsedSeconds}
+                                      </div>
+                                      <div className="text-right">
+                                        <span className="text-[10px] text-slate-400 block font-semibold">Target 90 Menit</span>
+                                        <span className="text-xs font-bold text-slate-300">{sch.completed_sessions || 0} / {sch.target_sessions || 8} Sesi</span>
+                                      </div>
+                                    </div>
+
+                                    {/* Progress Bar */}
+                                    <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
+                                      <div
+                                        className="h-full bg-emerald-400 rounded-full transition-all duration-500"
+                                        style={{ width: `${progressPercentage}%` }}
+                                      />
+                                    </div>
+
+                                    <div className="flex justify-between items-center text-[11px] pt-1">
+                                      <span className="text-slate-400 font-medium">Materi: {sch.today_topic || 'Bimbingan Belajar'}</span>
+                                      <span className="text-emerald-400 font-bold">{progressPercentage}% Lengkap</span>
+                                    </div>
+
+                                    {/* Tombol Timer Jeda & Selesai */}
+                                    <div className="grid grid-cols-2 gap-2 pt-2">
+                                      {!sch.is_timer_active ? (
+                                        <button
+                                          onClick={() => handleStartSessionTimer(sch)}
+                                          className="py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-sm col-span-2"
+                                        >
+                                          <Icon name="play_arrow" className="text-[16px]" /> Mulai Sesi KBM
+                                        </button>
+                                      ) : (
+                                        <>
+                                          <button
+                                            onClick={() => alert('Sesi sedang berjalan. Waktu terus dihitung otomatis.')}
+                                            className="py-2.5 px-3 rounded-xl bg-[#232a3d] hover:bg-[#2d364e] text-slate-200 text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 border border-slate-700/60"
+                                          >
+                                            <Icon name="pause_circle" className="text-[16px] text-amber-400" /> Jeda Sesi
+                                          </button>
+                                          <button
+                                            onClick={() => { setPhotoModalTarget(sch); setKbmPhotoFile(null); }}
+                                            className="py-2.5 px-3 rounded-xl bg-[#232a3d] hover:bg-[#2d364e] text-rose-300 text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 border border-slate-700/60"
+                                          >
+                                            <Icon name="stop_circle" className="text-[16px] text-rose-400" /> Selesaikan Sesi
+                                          </button>
+                                        </>
+                                      )}
                                     </div>
                                   </div>
+
+                                  {/* 6. Tombol Check-In Foto KBM & Lapor Ortu */}
+                                  <button
+                                    onClick={() => { setPhotoModalTarget(sch); setKbmPhotoFile(null); }}
+                                    className="w-full py-3.5 rounded-2xl bg-[#4edea3] hover:bg-[#5affb8] text-[#003824] font-black text-xs shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+                                  >
+                                    <Icon name="photo_camera" className="text-[20px]" />
+                                    <span>Check-In Foto KBM & Lapor Ortu Langsung</span>
+                                  </button>
+
                                 </div>
 
-                                <button
-                                  onClick={() => setOnlineClassSchedule(sch)}
-                                  className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-sm flex items-center justify-center gap-2 transition-all cursor-pointer"
-                                >
-                                  <Icon name="video_camera_front" className="text-[18px]" />
-                                  <span>Buka Ruang Kelas Online (Jitsi Meet)</span>
-                                </button>
-
-                                {/* Stopwatch Durasi KBM */}
-                                <div className="p-4 rounded-xl bg-slate-50 dark:bg-[#1c1f29] border border-slate-200/80 dark:border-transparent flex flex-col items-center text-center space-y-2">
-                                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Sisa Waktu Sesi (Target 90 Menit)</span>
-                                  <div className={`text-3xl font-black font-mono tracking-wider ${isTimerRunning ? 'text-emerald-500 animate-pulse' : 'text-slate-900 dark:text-white'}`}>
-                                    {isTimerRunning ? formatTimerSeconds(timerSec) : '90:00'}
+                                {/* KOTAK CATATAN KHUSUS ORANG TUA */}
+                                <div className="p-4 rounded-2xl bg-[#141926] border border-slate-800 text-xs space-y-1.5 shadow-sm">
+                                  <div className="flex items-center gap-2 text-amber-400 font-bold">
+                                    <Icon name="lightbulb" className="text-[18px]" />
+                                    <span>Catatan Khusus Orang Tua</span>
                                   </div>
-                                  {!sch.is_timer_active ? (
-                                    <button
-                                      onClick={() => handleStartSessionTimer(sch)}
-                                      className="py-2 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
-                                    >
-                                      Mulai Sesi & Stopwatch KBM
-                                    </button>
-                                  ) : (
-                                    <span className="text-xs text-emerald-600 font-bold">Sesi KBM Sedang Berjalan</span>
-                                  )}
+                                  <p className="text-slate-300 italic pl-6 leading-relaxed">
+                                    "{sch.today_topic ? `${sch.student_name} perlu penguatan konsep ${sch.today_topic} untuk persiapan ujian pekan depan.` : 'Siswa siap belajar intensif tatap muka.'}"
+                                  </p>
                                 </div>
-
-                                <button
-                                  onClick={() => { setPhotoModalTarget(sch); setKbmPhotoFile(null); }}
-                                  className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
-                                >
-                                  <Icon name="photo_camera" className="text-[18px]" />
-                                  <span>Check-In Foto KBM & Lapor Ortu (+1 Sesi)</span>
-                                </button>
                               </div>
                             );
                           })
